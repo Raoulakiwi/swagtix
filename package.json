@@ -8,11 +8,15 @@
     "start": "next start"
   },
   "dependencies": {
+    "ethers": "^5.7.2",
     "next": "^14.0.4",
+    "qrcode.react": "^3.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "ethers": "^5.7.2",
-    "qrcode.react": "^3.1.0",
     "web3.storage": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.5",
+    "typescript": "5.8.3"
   }
 }
