@@ -1,7 +1,7 @@
 {
-  "name": "rabby",
+  "name": "swagtix-wallet",
   "version": "0.93.33",
-  "description": "A browser plugin for DeFi users",
+  "description": "SwagTix NFT Ticket Wallet (forked from Rabby and streamlined for PulseChain ticketing)",
   "scripts": {
     "clean": "node build/clean.js",
     "make-theme": "node ./scripts/make-theme.js",
@@ -144,7 +144,11 @@
     "uuid": "9.0.0",
     "viem": "2.23.15",
     "web3-eth-abi": "1.7.0",
-    "webextension-polyfill": "0.7.0"
+    "webextension-polyfill": "0.7.0",
+    "@web3auth/base": "^7.0.0",
+    "@web3auth/modal": "^7.0.0",
+    "@web3auth/openlogin-adapter": "^7.0.0",
+    "@web3auth/ethereum-provider": "^7.0.0"
   },
   "devDependencies": {
     "@sentry/webpack-plugin": "2.16.1",
