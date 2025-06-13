@@ -1,32 +1,45 @@
-import { init } from '@rematch/core';
-import { models, RootModel, RabbyDispatch, RabbyRootState } from './models';
-import {
-  connect,
-  useDispatch,
-  useSelector,
-  TypedUseSelectorHook,
-} from 'react-redux';
-import selectPlugin from '@rematch/select';
+import { createModel } from '@rematch/core';
+import { RootModel } from '.';
 
-import onStoreInitialized from './models/_uistore';
-
-const store = init<RootModel>({ models, plugins: [selectPlugin()] });
-
-onStoreInitialized(store);
-
-export type { RabbyRootState };
-
-export { connect as connectStore };
-
-export const useRabbyDispatch = () => useDispatch<RabbyDispatch>();
-export const useRabbySelector: TypedUseSelectorHook<RabbyRootState> = useSelector;
-
-export function useRabbyGetter<Selected = unknown>(
-  selector: (
-    select: typeof store['select']
-  ) => (state: RabbyRootState) => Selected
-) {
-  return useSelector(selector(store.select));
+export interface UIState {
+  isShowSideBar: boolean;
+  isShowAccountList: boolean;
+  currentTab: string;
+  isPinSetup: boolean;
 }
 
-export default store;
+export const ui = createModel<RootModel>()({
+  name: 'ui',
+  state: {
+    isShowSideBar: false,
+    isShowAccountList: false,
+    currentTab: 'nft-tickets',
+    isPinSetup: false,
+  } as UIState,
+  reducers: {
+    toggleSideBar(state) {
+      return {
+        ...state,
+        isShowSideBar: !state.isShowSideBar,
+      };
+    },
+    toggleAccountList(state) {
+      return {
+        ...state,
+        isShowAccountList: !state.isShowAccountList,
+      };
+    },
+    setCurrentTab(state, tab: string) {
+      return {
+        ...state,
+        currentTab: tab,
+      };
+    },
+    setIsPinSetup(state, isPinSetup: boolean) {
+      return {
+        ...state,
+        isPinSetup,
+      };
+    },
+  },
+});

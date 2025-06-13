@@ -10,9 +10,7 @@ import permissionService from './permission';
 import { createPersistStore } from '@/background/utils';
 import { keyringService } from './keyring';
 import { message } from '@/background/webapi';
-
-const WEB3AUTH_CLIENT_ID = process.env.WEB3AUTH_CLIENT_ID || 'YOUR_WEB3AUTH_CLIENT_ID'; // Replace with actual client ID
-const WEB3AUTH_NETWORK = 'testnet'; // Change to 'mainnet' for production
+import env from '@/utils/env';
 
 interface Web3AuthStore {
   isLoggedIn: boolean;
@@ -63,13 +61,13 @@ class Web3AuthService extends EventEmitter {
 
       // Initialize Web3Auth
       this.web3auth = new Web3Auth({
-        clientId: WEB3AUTH_CLIENT_ID,
+        clientId: env.web3Auth.clientId,
         chainConfig: {
           chainNamespace: CHAIN_NAMESPACES.EIP155,
           chainId: CHAIN_INFO.PULSE.chainId,
           rpcTarget: CHAIN_INFO.PULSE.rpcUrls[0],
         },
-        web3AuthNetwork: WEB3AUTH_NETWORK,
+        web3AuthNetwork: env.web3Auth.network,
         uiConfig: {
           appName: 'SwagTix Wallet',
           theme: 'dark',

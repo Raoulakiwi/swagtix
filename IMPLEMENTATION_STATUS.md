@@ -1,5 +1,5 @@
 # SwagTix – Implementation Status  
-_Last updated: 2025-06-12_
+_Last updated: 2025-06-13_
 
 ---
 
@@ -24,7 +24,10 @@ _Last updated: 2025-06-12_
 | Branding | • New SVG logo, logo-with-text, favicon.<br>• `swagtix-theme.less`, runtime `theme.ts` with CSS vars & dark-mode.<br>• Animated splash screen. |
 | PulseChain Focus | • `networks.pulsechain.ts` with RPC `https://rpc.pulsechain.com`, chainId `0x171`.<br>• Default chain constants exported. |
 | NFT Ticket UI | • `NFTTickets/` view listing owned ERC-1155 tickets, parsing dynamic `uri()`, QR modal, status badges.<br>• Embedded ABI file. |
-| Authentication | • `background/service/web3auth.ts` scaffolds Web3Auth modal + private-key import.<br>• `Unlock/Web3AuthLogin.tsx` email login screen. |
+| Authentication & Security | • `background/service/web3auth.ts` now initialises Web3Auth using env vars.<br>• Email–first onboarding (`Welcome`, `EmailSignup`, `CreatePin`).<br>• Secure PIN service (`background/service/pin.ts`) with rate-limit & hashing. |
+| Simplified Navigation | • New router makes **My Tickets** home, hides DeFi routes.<br>• Non-crypto wording throughout (Account ID, Ticket, etc.). |
+| Feature-cleanup Scaffold | • `scripts/cleanup-features.sh` created to delete swap/DeFi code and patch manifests/networks/navigation. |
+| Env Handling | • `.env.example` + `utils/env.ts` centralise configuration (client-ID, RPCs, contract addr). |
 | Docs | • Roadmap and branding guides committed. |
 
 ---
@@ -33,42 +36,45 @@ _Last updated: 2025-06-12_
 
 | Item | Current State | Owner |
 |------|---------------|-------|
-| **Theme wiring** | Theme file exists; global import & variable injection still to hook into wallet entry. | Frontend |
-| **Web3Auth flow** | Service + UI scaffolded, needs ENV `WEB3AUTH_CLIENT_ID` and unlock route switch. | Auth |
-| **PulseChain only mode** | Chain constants ready; ChainSelector & multi-chain logic not yet pruned. | Core |
-| **De-feature Rabby** | DeFi, swaps, approvals modules still present. | Core |
+| **Theme wiring** | CSS vars util present; need single import in `index.less` + audit for hard-coded colors. | Frontend |
+| **PIN Integration** | PIN verified locally; still must gate `wallet.unlock()` and add reset flows. | Auth |
+| **PulseChain Only** | Cleanup script written; must run & delete ChainSelector, test RPC fallbacks. | Core |
+| **Contract Wiring** | ENV variable placeholder; need actual deployed `EventTicket1155` addr + helper hooks. | Chain |
 | **Mobile builds** | Capacitor/Ionic wrapper not started. | Mobile |
+| **CI / Tests** | No automated pipeline yet, minimal Jest coverage. | DevOps |
 
 ---
 
 ## 4. Next Steps (Sprint-1)
 
-1. **Prune Unused Features**  
-   ‑ Delete swap/DeFi views & services, remove menu entries, clean Redux/Zustand slices.
+1. **Execute Feature Cleanup**  
+   ‑ Run `scripts/cleanup-features.sh`, commit removed files, ensure build passes.  
+   ‑ Remove ChainSelector component & multi-chain helpers.
 
-2. **Force PulseChain**  
-   ‑ Strip network selector, hard-set provider to PulseChain RPC.  
-   ‑ Update explorer links.
+2. **PulseChain Hard-Lock**  
+   ‑ Verify only PulseChain RPC used, add fallback env.  
+   ‑ Update explorer links in helpers.
 
-3. **Finish Web3Auth Integration**  
-   ‑ Add client ID env, ensure key import triggers wallet unlock.  
-   ‑ Replace seed-phrase screens in default flow.
+3. **Complete Auth & PIN Flow**  
+   ‑ Hook PIN verify into `wallet.unlock()`.  
+   ‑ Add PIN reset via verified email.  
+   ‑ Finalise unlock route switching.
 
-4. **Global Theme Application**  
-   ‑ Import `swagtix-theme.less` in wallet entry (`index.less`).  
-   ‑ Call `initTheme()` on app boot.  
-   ‑ Audit components for hard-coded Rabby colors.
+4. **Global Theme Hook-Up**  
+   ‑ Import theme in root `index.less` & `initTheme()` in app bootstrap.  
+   ‑ Replace leftover Rabby palette usages.
 
-5. **Route & Navigation**  
-   ‑ Make `NFTTickets` the home page.  
-   ‑ Hide assets tab until ticket transfers ready.
+5. **Contract Deployment & Wiring**  
+   ‑ Deploy `EventTicket1155` to PulseChain mainnet, update env.  
+   ‑ Add hooks for balanceOfBatch to speed ticket load.
 
-6. **Contract Address Wiring**  
-   ‑ Set `EVENT_TICKET_CONTRACT` constant via env.
+6. **Testing & CI**  
+   ‑ Jest: PIN service, Web3Auth import success, ticket fetch hook.  
+   ‑ GitHub Actions: lint, test, build.
 
-7. **Testing & CI**  
-   ‑ Ensure `yarn build:dev` succeeds post-pruning.  
-   ‑ Add basic jest test for Web3Auth login success.
+7. **Mobile & Packaging**  
+   ‑ Capacitor config, iOS/Android splash/icons, biometric unlock (nice-to-have).  
+   ‑ Generate PNG icons for extension manifest.
 
 ---
 
@@ -85,9 +91,12 @@ _Last updated: 2025-06-12_
 ## 6. Action Items Before Next Commit
 
 - [ ] Hook theme import & init.
-- [ ] Remove `swap.ts`, `src/ui/views/Swap*`, update navigation.
-- [ ] Connect Web3Auth login route from unlock flow.
+- [ ] Execute cleanup script & commit.
+- [ ] Hook theme import & init.
+- [ ] Connect PIN & Web3Auth to unlock.
+- [ ] Set `EVENT_TICKET_CONTRACT` env to deployed addr.
 - [ ] Generate extension icons (PNG) from SVGs for manifest.
+- [ ] Add GitHub Actions test + build workflow.
 
 ---
 
