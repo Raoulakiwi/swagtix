@@ -70,10 +70,16 @@ log_success "Latest changes pulled successfully."
 if [ -d "$REACT_SRC_DIR" ]; then
   log_info "Installing React frontend dependencies..."
   cd "$REACT_SRC_DIR" || handle_error "Cannot cd to $REACT_SRC_DIR"
-  # Use npm ci if node_modules exists, otherwise npm install
-  if [ -d "node_modules" ]; then
+
+  # Decide whether to run npm ci or npm install
+  # Use npm ci only when both node_modules **and** package-lock.json exist
+  # This avoids the first-time deployment failure when node_modules exists
+  # (e.g., copied from an earlier incomplete run) but the lock-file is missing.
+  if [[ -f "package-lock.json" && -d "node_modules" ]]; then
+    log_info "package-lock.json and node_modules found – running npm ci"
     npm ci --silent || handle_error "npm ci failed for React app"
   else
+    log_info "Running npm install (first-time or lockfile missing)"
     npm install --silent || handle_error "npm install failed for React app"
   fi
 
