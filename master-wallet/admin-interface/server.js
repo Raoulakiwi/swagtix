@@ -69,6 +69,16 @@ app.get('/api/status', (req, res) => {
 });
 
 // Middleware to ensure wallet and contract services are initialized for protected routes
+const ensureWalletInitialized = (req, res, next) => {
+  if (!walletService.isInitialized) {
+    return res.status(503).json({
+      success: false,
+      message: 'Wallet service is not initialized. Please check server logs.'
+    });
+  }
+  next();
+};
+
 const ensureServicesInitialized = (req, res, next) => {
   if (!walletService.isInitialized) {
     return res.status(503).json({
@@ -145,7 +155,7 @@ app.get(`${process.env.API_BASE_URL || '/api/v1'}/contract/status`, (req, res) =
 
 app.post(
   `${process.env.API_BASE_URL || '/api/v1'}/contract/deploy`,
-  ensureServicesInitialized,
+  ensureWalletInitialized, // only wallet is required for deployment
   async (req, res) => {
     try {
       const result = await contractService.deployEventTicketContract();
@@ -263,15 +273,33 @@ app.get(`${process.env.API_BASE_URL || '/api/v1'}/contract/tickets`, ensureServi
 
 // Serve static files in production
 const clientBuildPath = path.join(__dirname, 'client/build');
+// Path to standalone dashboard file (used when React build not yet generated)
+const dashboardPath = path.join(__dirname, 'client', 'dashboard.html');
 if (fs.existsSync(clientBuildPath)) {
   app.use(express.static(clientBuildPath));
   app.get('*', (req, res) => {
     res.sendFile(path.join(clientBuildPath, 'index.html'));
   });
 } else {
-  // Fallback for when client/build doesn't exist (e.g., during initial setup)
-  app.get('/', (req, res) => {
-    res.send(`
+  /**
+   * Serve standalone dashboard if it exists.
+   * This allows basic contract deployment & management before
+   * a full React build is available.
+   */
+  if (fs.existsSync(dashboardPath)) {
+    // Dedicated route so users can always access the dashboard directly
+    app.get('/dashboard', (req, res) => {
+      res.sendFile(dashboardPath);
+    });
+
+    // Default root points to the dashboard as well
+    app.get('/', (req, res) => {
+      res.sendFile(dashboardPath);
+    });
+  } else {
+    // Plain HTML fallback when neither build nor dashboard are present
+    app.get('/', (req, res) => {
+      res.send(`
       <!DOCTYPE html>
       <html>
       <head>
@@ -303,7 +331,8 @@ if (fs.existsSync(clientBuildPath)) {
       </body>
       </html>
     `);
-  });
+    });
+  }
 }
 
 // Function to get wallet password from file or environment variable

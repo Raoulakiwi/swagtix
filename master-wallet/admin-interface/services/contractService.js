@@ -10,6 +10,8 @@ class ContractService {
     this.eventTicketAddress = process.env.EVENT_TICKET_CONTRACT;
     this.eventTicketContract = null;
     this.isInitialized = false;
+    // Location of the .env file (one directory up from this service file)
+    this.envPath = path.join(__dirname, '..', '.env');
   }
 
   /**
@@ -80,6 +82,8 @@ class ContractService {
       this.eventTicketAddress = contract.address;
       this.eventTicketContract = contract;
       this.isInitialized = true;
+      // Persist the address to the .env file for future restarts
+      await this.updateEnvFile(contract.address);
       
       return {
         address: contract.address,
@@ -88,6 +92,41 @@ class ContractService {
     } catch (error) {
       logger.error('Failed to deploy EventTicket1155 contract:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Persist the deployed contract address to the .env file
+   * so the service can auto-connect on the next restart.
+   * @param {string} address The deployed contract address
+   */
+  async updateEnvFile(address) {
+    try {
+      // Read existing .env (create if missing)
+      let envContent = '';
+      if (fs.existsSync(this.envPath)) {
+        envContent = fs.readFileSync(this.envPath, 'utf8');
+      }
+
+      const lines = envContent.split(/\r?\n/);
+      let found = false;
+
+      const newLines = lines.map((line) => {
+        if (line.startsWith('EVENT_TICKET_CONTRACT=')) {
+          found = true;
+          return `EVENT_TICKET_CONTRACT=${address}`;
+        }
+        return line;
+      });
+
+      if (!found) {
+        newLines.push(`EVENT_TICKET_CONTRACT=${address}`);
+      }
+
+      fs.writeFileSync(this.envPath, newLines.join('\n'), 'utf8');
+      logger.info('.env updated with new EVENT_TICKET_CONTRACT address.');
+    } catch (err) {
+      logger.warn('Unable to update .env with contract address:', err.message);
     }
   }
 
