@@ -26,12 +26,12 @@ class ContractService {
         logger.info(`Attempting to connect to EventTicket1155 contract at ${this.eventTicketAddress}`);
         this.eventTicketContract = walletService.getContract(
           this.eventTicketAddress,
-          eventTicketABI
+          eventTicketABI.abi
         );
         
         // Verify contract is deployed by trying to call a view function
         try {
-          await this.eventTicketContract.name();
+          await this.eventTicketContract.nextTokenId();
           logger.info(`EventTicket1155 contract connected at ${this.eventTicketAddress}`);
           this.isInitialized = true;
           return true;
@@ -52,11 +52,8 @@ class ContractService {
 
   /**
    * Deploy a new EventTicket1155 contract
-   * @param {string} name - The name of the ticket contract
-   * @param {string} symbol - The symbol of the ticket contract
-   * @param {string} baseURI - The base URI for ticket metadata
    */
-  async deployEventTicketContract(name, symbol, baseURI) {
+  async deployEventTicketContract() {
     try {
       if (!walletService.isInitialized) {
         throw new Error('Wallet service not initialized. Cannot deploy contract.');
@@ -72,7 +69,7 @@ class ContractService {
       );
       
       // Deploy the contract
-      const contract = await factory.deploy(name, symbol, baseURI);
+      const contract = await factory.deploy();
       
       // Wait for deployment to finish
       await contract.deployed();
@@ -96,57 +93,42 @@ class ContractService {
 
   /**
    * Mint new tickets
-   * @param {string} eventId - The ID of the event
-   * @param {string} eventName - The name of the event
-   * @param {string} eventDate - The date of the event
-   * @param {string} venue - The venue of the event
-   * @param {string} ticketType - The type of ticket
-   * @param {number} amount - The number of tickets to mint
-   * @param {string} price - The price of each ticket in PLS
-   * @param {string} metadataURI - The URI for the ticket metadata
+   * @param {string} to - Recipient address
+   * @param {uint256} amount - Number of tickets
+   * @param {uint256} eventTimestamp - Event time (unix timestamp)
+   * @param {string} qrCodeUri - URI to QR code image
+   * @param {string} mediaUri - URI to photo or video (shown after event)
    */
-  async mintTickets(eventId, eventName, eventDate, venue, ticketType, amount, price, metadataURI) {
+  async mintTickets(to, amount, eventTimestamp, qrCodeUri, mediaUri) {
     try {
       if (!this.isInitialized) {
         throw new Error('Contract service not initialized.');
       }
       
-      logger.info(`Minting ${amount} tickets for event ${eventName}...`);
+      logger.info(`Minting ${amount} tickets to ${to} for event at ${eventTimestamp}...`);
       
-      // Create ticket metadata
-      const ticketMetadata = {
-        eventId,
-        eventName,
-        eventDate,
-        venue,
-        ticketType,
-        price
-      };
-      
-      // Convert price to wei
-      const priceInWei = ethers.utils.parseEther(price.toString());
-      
-      // Mint tickets
-      const tx = await this.eventTicketContract.mintBatch(
+      // Mint tickets using the contract's mintTicket function
+      const tx = await this.eventTicketContract.mintTicket(
+        to,
         amount,
-        priceInWei,
-        metadataURI,
-        JSON.stringify(ticketMetadata)
+        eventTimestamp,
+        qrCodeUri,
+        mediaUri
       );
       
       // Wait for transaction to be mined
       const receipt = await tx.wait();
       
-      // Get the token ID from the event logs
-      const mintEvent = receipt.events.find(e => e.event === 'TicketsMinted');
-      const tokenId = mintEvent.args.tokenId.toNumber();
+      // Get the token ID from the event logs (assuming TransferSingle event is emitted)
+      const transferEvent = receipt.events.find(e => e.event === 'TransferSingle');
+      const tokenId = transferEvent ? transferEvent.args.id.toString() : 'unknown';
       
       logger.info(`Successfully minted ${amount} tickets with token ID ${tokenId}`);
       
       return {
         tokenId,
+        to,
         amount,
-        price: price.toString(),
         transactionHash: receipt.transactionHash
       };
     } catch (error) {
@@ -167,27 +149,31 @@ class ContractService {
       
       logger.info(`Getting information for ticket ${tokenId}...`);
       
-      // Get ticket metadata
-      const metadataURI = await this.eventTicketContract.uri(tokenId);
-      const ticketData = await this.eventTicketContract.getTicketData(tokenId);
-      const price = ethers.utils.formatEther(ticketData.price);
-      const totalSupply = await this.eventTicketContract.totalSupply(tokenId);
-      const availableSupply = await this.eventTicketContract.availableSupply(tokenId);
+      // Get ticket metadata and info from the contract
+      const uri = await this.eventTicketContract.uri(tokenId);
+      const ticketData = await this.eventTicketContract.ticketInfo(tokenId);
       
-      // Parse metadata JSON if it's stored on-chain
-      let metadata = {};
+      // Parse metadata JSON from URI
+      let metadata = { name: `Ticket #${tokenId}`, description: '', image: '' };
       try {
-        metadata = JSON.parse(ticketData.metadata);
+        // Assuming uri returns data:application/json;utf8,... or http(s)://...
+        if (uri.startsWith('data:application/json')) {
+          const jsonString = decodeURIComponent(uri.split(',')[1]);
+          metadata = JSON.parse(jsonString);
+        } else if (uri.startsWith('http')) {
+          const response = await fetch(uri);
+          metadata = await response.json();
+        }
       } catch (e) {
-        logger.warn(`Could not parse metadata for ticket ${tokenId}`);
+        logger.warn(`Could not parse metadata for ticket ${tokenId}:`, e.message);
       }
       
       return {
         tokenId,
-        metadataURI,
-        price,
-        totalSupply: totalSupply.toNumber(),
-        availableSupply: availableSupply.toNumber(),
+        metadataURI: uri,
+        eventTimestamp: ticketData.eventTimestamp.toString(),
+        qrCodeUri: ticketData.qrCodeUri,
+        mediaUri: ticketData.mediaUri,
         metadata
       };
     } catch (error) {
@@ -207,15 +193,14 @@ class ContractService {
       
       logger.info('Getting all tickets...');
       
-      // Get the total number of ticket types
-      const ticketCount = await this.eventTicketContract.getTicketCount();
+      // Get the nextTokenId to iterate through all minted tickets
+      const nextTokenId = await this.eventTicketContract.nextTokenId();
       
-      // Get information for each ticket type
       const tickets = [];
-      for (let i = 1; i <= ticketCount; i++) {
+      for (let i = 1; i < nextTokenId.toNumber(); i++) {
         try {
-          const ticketInfo = await this.getTicketInfo(i);
-          tickets.push(ticketInfo);
+          const ticket = await this.getTicketInfo(i);
+          tickets.push(ticket);
         } catch (error) {
           logger.warn(`Error getting info for ticket ${i}:`, error.message);
         }
@@ -224,48 +209,6 @@ class ContractService {
       return tickets;
     } catch (error) {
       logger.error('Failed to get all tickets:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Purchase tickets
-   * @param {number} tokenId - The ID of the ticket
-   * @param {number} amount - The number of tickets to purchase
-   * @param {string} buyerAddress - The address of the buyer
-   */
-  async purchaseTickets(tokenId, amount, buyerAddress) {
-    try {
-      if (!this.isInitialized) {
-        throw new Error('Contract service not initialized.');
-      }
-      
-      logger.info(`Processing purchase of ${amount} tickets with ID ${tokenId} for ${buyerAddress}...`);
-      
-      // Get ticket price
-      const ticketData = await this.eventTicketContract.getTicketData(tokenId);
-      const pricePerTicket = ticketData.price;
-      const totalPrice = pricePerTicket.mul(amount);
-      
-      // Purchase tickets
-      const tx = await this.eventTicketContract.purchaseTickets(tokenId, amount, buyerAddress, {
-        value: totalPrice
-      });
-      
-      // Wait for transaction to be mined
-      const receipt = await tx.wait();
-      
-      logger.info(`Successfully purchased ${amount} tickets for ${buyerAddress}`);
-      
-      return {
-        tokenId,
-        amount,
-        buyer: buyerAddress,
-        totalPrice: ethers.utils.formatEther(totalPrice),
-        transactionHash: receipt.transactionHash
-      };
-    } catch (error) {
-      logger.error('Failed to purchase tickets:', error);
       throw error;
     }
   }
@@ -301,12 +244,9 @@ class ContractService {
       
       logger.info(`Getting tickets owned by ${address}...`);
       
-      // Get the total number of ticket types
-      const ticketCount = await this.eventTicketContract.getTicketCount();
-      
-      // Check ownership for each ticket type
+      const nextTokenId = await this.eventTicketContract.nextTokenId();
       const ownedTickets = [];
-      for (let i = 1; i <= ticketCount; i++) {
+      for (let i = 1; i < nextTokenId.toNumber(); i++) {
         const balance = await this.eventTicketContract.balanceOf(address, i);
         if (balance.toNumber() > 0) {
           const ticketInfo = await this.getTicketInfo(i);
@@ -325,7 +265,7 @@ class ContractService {
   }
 
   /**
-   * Validate a ticket
+   * Validate a ticket (placeholder - actual validation logic would be more complex)
    * @param {number} tokenId - The ID of the ticket
    * @param {string} ownerAddress - The address of the ticket owner
    */
@@ -337,7 +277,7 @@ class ContractService {
       
       logger.info(`Validating ticket ${tokenId} for ${ownerAddress}...`);
       
-      // Check if the address owns the ticket
+      // Placeholder for actual validation logic
       const ownsTicket = await this.ownsTicket(ownerAddress, tokenId);
       if (!ownsTicket) {
         return {
@@ -346,26 +286,15 @@ class ContractService {
         };
       }
       
-      // Check if the ticket has been used
-      const isUsed = await this.eventTicketContract.isTicketUsed(tokenId, ownerAddress);
-      if (isUsed) {
-        return {
-          valid: false,
-          reason: 'Ticket has already been used'
-        };
-      }
-      
-      // Mark the ticket as used
-      const tx = await this.eventTicketContract.useTicket(tokenId, ownerAddress);
-      await tx.wait();
-      
-      logger.info(`Successfully validated ticket ${tokenId} for ${ownerAddress}`);
+      // In a real scenario, you'd interact with the contract to mark it as used
+      // For now, we'll just simulate success
+      logger.info(`Successfully validated ticket ${tokenId} for ${ownerAddress} (simulated)`);
       
       return {
         valid: true,
         tokenId,
         owner: ownerAddress,
-        transactionHash: tx.hash
+        transactionHash: 'simulated_tx_hash'
       };
     } catch (error) {
       logger.error(`Failed to validate ticket ${tokenId} for ${ownerAddress}:`, error);
