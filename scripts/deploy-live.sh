@@ -15,6 +15,10 @@ REPO_DIR="$HOME/swagtix"
 APP_DIR="/opt/swagtix/app"
 # PM2 process name
 PM2_APP_NAME="swagtix-admin"
+# Path to React admin interface inside the repo
+REACT_SRC_DIR="$REPO_DIR/master-wallet/admin-interface/client/react-app"
+# Final location of the compiled React build on the live server
+REACT_BUILD_DIR="$APP_DIR/client/build"
 
 # --- Colors for output ---
 GREEN='\033[0;32m'
@@ -62,6 +66,25 @@ log_info "Pulling latest changes from Git..."
 git pull origin main || handle_error "Git pull failed"
 log_success "Latest changes pulled successfully."
 
+# 1.5 Build / update the React admin interface
+if [ -d "$REACT_SRC_DIR" ]; then
+  log_info "Installing React frontend dependencies..."
+  cd "$REACT_SRC_DIR" || handle_error "Cannot cd to $REACT_SRC_DIR"
+  # Use npm ci if node_modules exists, otherwise npm install
+  if [ -d "node_modules" ]; then
+    npm ci --silent || handle_error "npm ci failed for React app"
+  else
+    npm install --silent || handle_error "npm install failed for React app"
+  fi
+
+  log_info "Building React frontend…"
+  npm run build --silent || handle_error "React build failed"
+  log_success "React frontend built successfully."
+  cd "$REPO_DIR" || handle_error "Failed to return to $REPO_DIR"
+else
+  log_warn "React source directory not found at $REACT_SRC_DIR – skipping frontend build."
+fi
+
 # 2. Copy updated files to the deployment location
 log_info "Copying updated files to deployment directory: $APP_DIR"
 
@@ -70,6 +93,15 @@ sudo mkdir -p "$APP_DIR/abis" || handle_error "Failed to create $APP_DIR/abis"
 sudo mkdir -p "$APP_DIR/services" || handle_error "Failed to create $APP_DIR/services"
 sudo mkdir -p "$APP_DIR/utils" || handle_error "Failed to create $APP_DIR/utils"
 sudo mkdir -p "$APP_DIR/client" || handle_error "Failed to create $APP_DIR/client"
+
+# Copy React build (if it was built)
+if [ -d "$REACT_SRC_DIR/build" ]; then
+  log_info "Deploying React frontend to $REACT_BUILD_DIR"
+  sudo rm -rf "$REACT_BUILD_DIR"
+  sudo mkdir -p "$REACT_BUILD_DIR"
+  sudo cp -r "$REACT_SRC_DIR/build/"* "$REACT_BUILD_DIR/" || handle_error "Failed to copy React build"
+  log_success "React frontend deployed."
+fi
 
 # Copy backend files
 sudo cp "$REPO_DIR/master-wallet/admin-interface/server.js" "$APP_DIR/" || handle_error "Failed to copy server.js"
