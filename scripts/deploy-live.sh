@@ -66,8 +66,25 @@ log_info "Pulling latest changes from Git..."
 git pull origin main || handle_error "Git pull failed"
 log_success "Latest changes pulled successfully."
 
-# 1.5 Build / update the React admin interface
-if [ -d "$REACT_SRC_DIR" ]; then
+# --- NPM diagnostics (run once early) ---
+if ! command -v npm >/dev/null 2>&1; then
+  handle_error "npm is not installed or not in PATH. Aborting."
+fi
+log_info "Using npm version: $(npm -v)"
+
+# Helper for running npm with verbose error capture
+run_npm_cmd() {
+  local DESC="$1"
+  shift
+  log_info "Running: $*"
+  if ! OUTPUT=$("$@" 2>&1); then
+    echo "$OUTPUT" >&2
+    handle_error "$DESC – command failed"
+  fi
+}
+
+# 1.5 Build / update the React admin interface (unless skipped)
+if [ -z "$SKIP_REACT" ] && [ -d "$REACT_SRC_DIR" ]; then
   log_info "Installing React frontend dependencies..."
   cd "$REACT_SRC_DIR" || handle_error "Cannot cd to $REACT_SRC_DIR"
 
@@ -77,17 +94,20 @@ if [ -d "$REACT_SRC_DIR" ]; then
   # (e.g., copied from an earlier incomplete run) but the lock-file is missing.
   if [[ -f "package-lock.json" && -d "node_modules" ]]; then
     log_info "package-lock.json and node_modules found – running npm ci"
-    npm ci --silent || handle_error "npm ci failed for React app"
+    run_npm_cmd "npm ci for React app" npm ci --silent
   else
     log_info "Running npm install (first-time or lockfile missing)"
-    npm install --silent || handle_error "npm install failed for React app"
+    run_npm_cmd "npm install for React app" npm install --silent
   fi
 
   log_info "Building React frontend…"
-  npm run build --silent || handle_error "React build failed"
+  run_npm_cmd "React build" npm run build --silent
   log_success "React frontend built successfully."
   cd "$REPO_DIR" || handle_error "Failed to return to $REPO_DIR"
-else
+# If React directory missing or skip flag set
+elif [ -n "$SKIP_REACT" ]; then
+  log_warn "SKIP_REACT flag set – skipping React build."
+elif [ ! -d "$REACT_SRC_DIR" ]; then
   log_warn "React source directory not found at $REACT_SRC_DIR – skipping frontend build."
 fi
 
