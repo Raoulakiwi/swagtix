@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Route, Switch, Redirect } from 'react-router-dom';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SnackbarProvider } from 'notistack';
 
 // Pages
@@ -92,58 +91,30 @@ const theme = createTheme({
   },
 });
 
-// Protected route wrapper
-const PrivateRoute = ({ children, ...rest }) => {
-  const { isAuthenticated, loading } = useAuth();
-  
-  if (loading) {
-    return <Loader />;
-  }
-  
-  return (
-    <Route
-      {...rest}
-      render={({ location }) =>
-        isAuthenticated ? (
-          children
-        ) : (
-          <Redirect
-            to={{
-              pathname: "/login",
-              state: { from: location }
-            }}
-          />
-        )
-      }
-    />
-  );
-};
-
 function App() {
   return (
-    <AuthProvider>
-      <ThemeProvider theme={theme}>
-        <SnackbarProvider maxSnack={3}>
-          <CssBaseline />
-          <Router>
-            <Switch>
-              <Route path="/login" component={Login} />
-              <PrivateRoute path="/">
-                <Layout>
-                  <Switch>
-                    <Route exact path="/" component={Dashboard} />
-                    <Route path="/contracts" component={ContractManagement} />
-                    <Route path="/tickets" component={TicketManagement} />
-                    <Route path="/settings" component={Settings} />
-                    <Route component={NotFound} />
-                  </Switch>
-                </Layout>
-              </PrivateRoute>
-            </Switch>
-          </Router>
-        </SnackbarProvider>
-      </ThemeProvider>
-    </AuthProvider>
+    <ThemeProvider theme={theme}>
+      <SnackbarProvider maxSnack={3}>
+        <CssBaseline />
+        <Router>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+
+            {/* Protected area wrapped in Layout – add auth later */}
+            <Route element={<Layout />}>
+              <Route index element={<Dashboard />} />
+              <Route path="contracts" element={<ContractManagement />} />
+              <Route path="tickets" element={<TicketManagement />} />
+              <Route path="settings" element={<Settings />} />
+              <Route path="*" element={<NotFound />} />
+            </Route>
+
+            {/* Redirect all unknown paths */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Router>
+      </SnackbarProvider>
+    </ThemeProvider>
   );
 }
 
