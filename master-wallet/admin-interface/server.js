@@ -19,6 +19,14 @@ const logger = require('./utils/logger');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+/**
+ * Tell Express that it is sitting behind a reverse-proxy (e.g. Nginx).
+ * This makes `req.ip`, `req.protocol`, secure cookies, etc. use the
+ * correct values from the `X-Forwarded-*` headers injected by the proxy.
+ * See: https://expressjs.com/en/guide/behind-proxies.html
+ */
+app.set('trust proxy', true);
+
 // Ensure logs directory exists
 const logDir = path.dirname(process.env.LOG_FILE || './logs/admin-interface.log');
 if (!fs.existsSync(logDir)) {
@@ -46,13 +54,37 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'http://192.168.0.199:3000'
 ];
 
+/**
+ * Merge user-supplied origins (comma-separated list in CORS_ORIGIN env)
+ * with the defaults so we support both direct LAN access AND the public
+ * hostname served by the reverse proxy.
+ */
+const extraOrigins =
+  process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map(s => s.trim()).filter(Boolean)
+    : [];
+const ALLOWED_ORIGINS = [...new Set([...DEFAULT_ALLOWED_ORIGINS, ...extraOrigins])];
+
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || DEFAULT_ALLOWED_ORIGINS,
+    origin: ALLOWED_ORIGINS,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
   })
 );
+
+// ------------------------------------------------------------
+// Debug helper – log real client IP & forwarded header
+// ------------------------------------------------------------
+app.use((req, _res, next) => {
+  // Logs will only be visible when LOG_LEVEL includes 'debug'
+  logger.debug(
+    `Incoming request from ${req.ip}. x-forwarded-for=${
+      req.headers['x-forwarded-for'] || 'N/A'
+    }`
+  );
+  next();
+});
 
 // Rate limiting
 const limiter = rateLimit({

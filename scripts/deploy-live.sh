@@ -228,6 +228,76 @@ sudo chmod 644 "$APP_DIR/client/dashboard.html" || handle_error "Failed to set p
 sudo chmod 755 "$APP_DIR/start.sh" || handle_error "Failed to set permissions for start.sh"
 log_success "File permissions set."
 
+# ---------------------------------------------------------------------------
+# 3.5 Ensure Nginx reverse-proxy configuration
+# ---------------------------------------------------------------------------
+
+log_info "Checking Nginx configuration for SwagTix reverse proxy..."
+
+NEED_NGINX_RELOAD=0
+NGINX_AVAIL="/etc/nginx/sites-available/swagtix-admin"
+NGINX_ENABLED="/etc/nginx/sites-enabled/swagtix-admin"
+NGINX_CONF_D="/etc/nginx/conf.d/swagtix-admin.conf"
+
+# Helper – create minimal proxy config
+create_nginx_conf() {
+  sudo bash -c "cat > \"$1\" <<'NGINX'
+server {
+    listen 80;
+    server_name _;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_cache_bypass \$http_upgrade;
+    }
+}
+NGINX"
+  log_success "Created minimal Nginx reverse-proxy config at $1"
+}
+
+# 1. Determine which config file to use / create
+if [ -f "$NGINX_AVAIL" ]; then
+  CFG_FILE="$NGINX_AVAIL"
+elif [ -f "$NGINX_CONF_D" ]; then
+  CFG_FILE="$NGINX_CONF_D"
+else
+  CFG_FILE="$NGINX_CONF_D"
+  create_nginx_conf "$CFG_FILE"
+  NEED_NGINX_RELOAD=1
+fi
+
+# 2. Ensure proxy_pass directive exists / correct
+if ! grep -q "proxy_pass http://127.0.0.1:3000;" "$CFG_FILE"; then
+  log_warn "proxy_pass directive missing or incorrect in $CFG_FILE – fixing."
+  sudo sed -i '/location \//,/}/{/proxy_pass/d}' "$CFG_FILE"
+  sudo sed -i '/location \//a\        proxy_pass http://127.0.0.1:3000;' "$CFG_FILE"
+  NEED_NGINX_RELOAD=1
+fi
+
+# 3. Enable site if using sites-available
+if [ "$CFG_FILE" = "$NGINX_AVAIL" ] && [ ! -L "$NGINX_ENABLED" ]; then
+  sudo ln -s "$NGINX_AVAIL" "$NGINX_ENABLED"
+  NEED_NGINX_RELOAD=1
+  log_success "Enabled $NGINX_AVAIL"
+fi
+
+# 4. Reload Nginx if required
+if [ "$NEED_NGINX_RELOAD" -eq 1 ]; then
+  log_info "Reloading Nginx to apply changes..."
+  if sudo nginx -t; then
+    sudo systemctl reload nginx
+    log_success "Nginx reloaded successfully."
+  else
+    log_error "Nginx configuration test failed – please review $CFG_FILE"
+  fi
+else
+  log_info "Nginx configuration already up-to-date."
+fi
+
 # 4. Install/Update Node.js dependencies
 log_info "Navigating to application directory for npm install: $APP_DIR"
 cd "$APP_DIR" || handle_error "Failed to change directory to $APP_DIR"
