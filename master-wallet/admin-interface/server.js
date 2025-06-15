@@ -78,11 +78,13 @@ app.use(
 // ------------------------------------------------------------
 app.use((req, _res, next) => {
   // Logs will only be visible when LOG_LEVEL includes 'debug'
-  logger.debug(
-    `Incoming request from ${req.ip}. x-forwarded-for=${
-      req.headers['x-forwarded-for'] || 'N/A'
-    }`
-  );
+  if (typeof logger.debug === 'function') {
+    logger.debug(
+      `Incoming request from ${req.ip}. x-forwarded-for=${
+        req.headers['x-forwarded-for'] || 'N/A'
+      }`
+    );
+  }
   next();
 });
 
@@ -392,12 +394,16 @@ const getWalletPassword = () => {
     if (fs.existsSync(passwordFilePath)) {
       const rawPassword = fs.readFileSync(passwordFilePath, 'utf8');
       // Log password details for debugging (length and hex representation)
-      logger.debug(`Read password from file. Raw length: ${rawPassword.length}`);
-      logger.debug(`Password hex: ${Buffer.from(rawPassword).toString('hex')}`);
+      if (typeof logger.debug === 'function') {
+        logger.debug(`Read password from file. Raw length: ${rawPassword.length}`);
+        logger.debug(`Password hex: ${Buffer.from(rawPassword).toString('hex')}`);
+      }
       
       // Trim the password to avoid whitespace issues
       const trimmedPassword = rawPassword.trim();
-      logger.debug(`Trimmed password length: ${trimmedPassword.length}`);
+      if (typeof logger.debug === 'function') {
+        logger.debug(`Trimmed password length: ${trimmedPassword.length}`);
+      }
       
       return trimmedPassword;
     }
@@ -405,7 +411,9 @@ const getWalletPassword = () => {
     // Fall back to environment variable
     if (process.env.WALLET_PASSWORD) {
       const envPassword = process.env.WALLET_PASSWORD.trim();
-      logger.debug(`Using password from environment variable. Length: ${envPassword.length}`);
+      if (typeof logger.debug === 'function') {
+        logger.debug(`Using password from environment variable. Length: ${envPassword.length}`);
+      }
       return envPassword;
     }
     
