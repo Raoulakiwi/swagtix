@@ -112,8 +112,16 @@ run_npm_cmd() {
   fi
 }
 
-# 1.5 Build / update the React admin interface (unless skipped)
-if [ -z "$SKIP_REACT" ] && [ -d "$REACT_SRC_DIR" ]; then
+# ---------------------------------------------------------------------------
+# 1.5 Build / update the React admin interface
+# ---------------------------------------------------------------------------
+
+# If user requested SIMPLE mode, skip React handling entirely.
+if [ -n "$SKIP_REACT" ]; then
+  log_warn "SKIP_REACT flag set – skipping React build."
+
+# Otherwise, proceed only if the React source directory exists
+elif [ -d "$REACT_SRC_DIR" ]; then
   log_info "Installing React frontend dependencies..."
   cd "$REACT_SRC_DIR" || handle_error "Cannot cd to $REACT_SRC_DIR"
 
@@ -133,10 +141,9 @@ if [ -z "$SKIP_REACT" ] && [ -d "$REACT_SRC_DIR" ]; then
   run_npm_cmd "React build" npm run build --silent
   log_success "React frontend built successfully."
   cd "$REPO_DIR" || handle_error "Failed to return to $REPO_DIR"
-# If React directory missing or skip flag set
-elif [ -n "$SKIP_REACT" ]; then
-  log_warn "SKIP_REACT flag set – skipping React build."
-elif [ ! -d "$REACT_SRC_DIR" ]; then
+
+# React directory not found
+else
   log_warn "React source directory not found at $REACT_SRC_DIR – skipping frontend build."
 fi
 
