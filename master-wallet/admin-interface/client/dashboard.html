@@ -165,6 +165,7 @@
 
     // Show message function
     function showMessage(message, type = 'info', timeout = 5000) {
+      console.log(`[UI Message] Type: ${type}, Message: ${message}`);
       const alertDiv = document.createElement('div');
       alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
       alertDiv.role = 'alert';
@@ -184,10 +185,12 @@
 
     // Fetch status from API
     async function fetchStatus() {
+      console.log('Fetching API and wallet status...');
       try {
         // Check API status
         const apiResponse = await fetch('/api/status');
         const apiData = await apiResponse.json();
+        console.log('API Status Response:', apiData);
         
         if (apiData.success) {
           apiStatusSpan.textContent = 'Online';
@@ -195,12 +198,15 @@
         } else {
           apiStatusSpan.textContent = 'Error';
           apiStatusSpan.className = 'badge bg-danger';
+          showMessage(`Backend API error: ${apiData.message || 'Unknown'}`, 'danger');
         }
         
         // Check wallet status
         const walletResponse = await fetch(`${API_BASE_URL}/wallet/status`);
+        console.log('Wallet Status Response:', walletResponse);
         if (walletResponse.ok) {
           const walletData = await walletResponse.json();
+          console.log('Wallet Data:', walletData);
           
           if (walletData.success) {
             walletStatusSpan.textContent = 'Connected';
@@ -211,53 +217,69 @@
             // Get wallet balance
             const balanceResponse = await fetch(`${API_BASE_URL}/wallet/balance`);
             const balanceData = await balanceResponse.json();
+            console.log('Balance Data:', balanceData);
             
             if (balanceData.success) {
               walletBalanceSpan.textContent = balanceData.balance;
             } else {
               walletBalanceSpan.textContent = 'Error loading balance';
+              showMessage(`Failed to load wallet balance: ${balanceData.message || 'Unknown'}`, 'warning');
             }
           } else {
             walletStatusSpan.textContent = 'Error';
             walletStatusSpan.className = 'badge bg-danger';
             walletAddressSpan.textContent = 'Not connected';
             walletBalanceSpan.textContent = 'N/A';
+            showMessage(`Wallet connection error: ${walletData.message || 'Unknown'}`, 'danger');
           }
         } else if (walletResponse.status === 503) {
           walletStatusSpan.textContent = 'Not Initialized';
           walletStatusSpan.className = 'badge bg-warning';
           walletAddressSpan.textContent = 'Wallet service not initialized';
           walletBalanceSpan.textContent = 'N/A';
+          showMessage('Wallet service not initialized. Check server logs for password issues.',
+            'warning');
         } else {
           walletStatusSpan.textContent = 'Error';
           walletStatusSpan.className = 'badge bg-danger';
-          walletAddressSpan.textContent = 'Error connecting to wallet';
+          walletAddressSpan.textContent = 'Connection failed';
           walletBalanceSpan.textContent = 'N/A';
+          showMessage(`Failed to connect to wallet service: ${walletResponse.statusText}`, 'danger');
         }
         
         // Check contract status
         const contractResponse = await fetch(`${API_BASE_URL}/contract/status`);
-        const contractData = await contractResponse.json();
+        console.log('Contract Status Response:', contractResponse);
         
-        if (contractData.success && contractData.isInitialized) {
-          // Contract is deployed
-          contractDeployedInfo.classList.remove('d-none');
-          contractDeployForm.classList.add('d-none');
-          deployedContractAddress.textContent = contractData.contractAddress;
+        if (contractResponse.ok) {
+          const contractData = await contractResponse.json();
+          console.log('Contract Data:', contractData);
           
-          // Set explorer link
-          explorerLink.href = `https://scan.pulsechain.com/address/${contractData.contractAddress}`;
-          
-          // Show ticket management section
-          ticketManagementSection.classList.remove('d-none');
-          
-          // Fetch tickets
-          fetchTickets();
-        } else {
-          // Contract not deployed
+          if (contractData.success && contractData.isInitialized) {
+            contractDeployedInfo.classList.remove('d-none');
+            contractDeployForm.classList.add('d-none');
+            deployedContractAddress.textContent = contractData.contractAddress;
+            
+            const explorerUrl = `https://scan.pulsechain.com/address/${contractData.contractAddress}`;
+            explorerLink.href = explorerUrl;
+            
+            // Show ticket management section
+            ticketManagementSection.classList.remove('d-none');
+            
+            // Fetch tickets
+            fetchTickets();
+          } else {
+            contractDeployedInfo.classList.add('d-none');
+            contractDeployForm.classList.remove('d-none');
+            ticketManagementSection.classList.add('d-none');
+          }
+        } else if (contractResponse.status === 503) {
+          showMessage('Contract service not initialized. Deploy the contract first.', 'warning');
           contractDeployedInfo.classList.add('d-none');
           contractDeployForm.classList.remove('d-none');
           ticketManagementSection.classList.add('d-none');
+        } else {
+          showMessage(`Failed to check contract status: ${contractResponse.statusText}`, 'danger');
         }
       } catch (error) {
         console.error('Error fetching status:', error);
@@ -265,17 +287,17 @@
         apiStatusSpan.className = 'badge bg-danger';
         walletStatusSpan.textContent = 'Error';
         walletStatusSpan.className = 'badge bg-danger';
-        showMessage(`Failed to fetch status: ${error.message}`, 'danger');
+        showMessage(`Failed to connect to backend API: ${error.message}`, 'danger');
       }
     }
 
     // Deploy contract
     async function deployContract() {
+      console.log('Deploying contract...');
+      deployContractBtn.disabled = true;
+      deployLoading.classList.remove('d-none');
+      
       try {
-        // Show loading state
-        deployContractBtn.disabled = true;
-        deployLoading.classList.remove('d-none');
-        
         const response = await fetch(`${API_BASE_URL}/contract/deploy`, {
           method: 'POST',
           headers: {
@@ -284,11 +306,12 @@
         });
         
         const data = await response.json();
+        console.log('Contract Deployment Response:', data);
         
         if (data.success) {
-          showMessage(`Contract deployed successfully at ${data.data.address}`, 'success');
+          showMessage(`Contract deployed successfully at ${data.data.contractAddress}!`, 'success');
           // Refresh status to update UI
-          fetchStatus();
+          await fetchStatus();
         } else {
           showMessage(`Failed to deploy contract: ${data.message}`, 'danger');
         }
@@ -296,7 +319,6 @@
         console.error('Error deploying contract:', error);
         showMessage(`Error deploying contract: ${error.message}`, 'danger');
       } finally {
-        // Hide loading state
         deployContractBtn.disabled = false;
         deployLoading.classList.add('d-none');
       }
@@ -305,27 +327,27 @@
     // Mint ticket
     async function mintTicket(event) {
       event.preventDefault();
+      console.log('Minting ticket...');
+      
+      const mintTo = document.getElementById('mintTo').value;
+      const mintAmount = document.getElementById('mintAmount').value;
+      const eventTimestamp = document.getElementById('eventTimestamp').value;
+      const qrCodeUri = document.getElementById('qrCodeUri').value;
+      const mediaUri = document.getElementById('mediaUri').value;
+      
+      const mintBtn = document.getElementById('mint-btn');
+      mintBtn.disabled = true;
+      mintLoading.classList.remove('d-none');
       
       try {
-        // Get form values
-        const to = document.getElementById('mintTo').value;
-        const amount = document.getElementById('mintAmount').value;
-        const eventTimestamp = document.getElementById('eventTimestamp').value;
-        const qrCodeUri = document.getElementById('qrCodeUri').value;
-        const mediaUri = document.getElementById('mediaUri').value;
-        
-        // Show loading state
-        document.getElementById('mint-btn').disabled = true;
-        mintLoading.classList.remove('d-none');
-        
         const response = await fetch(`${API_BASE_URL}/contract/mint`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            to,
-            amount: parseInt(amount),
+            to: mintTo,
+            amount: parseInt(mintAmount),
             eventTimestamp: parseInt(eventTimestamp),
             qrCodeUri,
             mediaUri
@@ -333,70 +355,54 @@
         });
         
         const data = await response.json();
+        console.log('Mint Ticket Response:', data);
         
         if (data.success) {
-          showMessage(`Successfully minted ${amount} ticket(s) with token ID ${data.data.tokenId}`, 'success');
-          // Clear form
+          showMessage(`Successfully minted ${mintAmount} ticket(s) to ${mintTo}!`, 'success');
+          // Reset form
           mintTicketForm.reset();
-          // Refresh tickets list
-          fetchTickets();
+          // Refresh tickets
+          await fetchTickets();
         } else {
-          showMessage(`Failed to mint ticket: ${data.message || 'Unknown error'}`, 'danger');
+          showMessage(`Failed to mint ticket: ${data.message}`, 'danger');
         }
       } catch (error) {
         console.error('Error minting ticket:', error);
         showMessage(`Error minting ticket: ${error.message}`, 'danger');
       } finally {
-        // Hide loading state
-        document.getElementById('mint-btn').disabled = false;
+        mintBtn.disabled = false;
         mintLoading.classList.add('d-none');
       }
     }
 
     // Fetch tickets
     async function fetchTickets() {
+      console.log('Fetching tickets...');
+      ticketsLoading.classList.remove('d-none');
+      noTicketsMessage.classList.add('d-none');
+      
+      // Clear existing tickets
+      const ticketsContainer = document.getElementById('tickets-list');
+      while (ticketsContainer.firstChild) {
+        if (ticketsContainer.firstChild === ticketsLoading || ticketsContainer.firstChild === noTicketsMessage) {
+          break;
+        }
+        ticketsContainer.removeChild(ticketsContainer.firstChild);
+      }
+      
       try {
-        // Show loading state
-        ticketsLoading.classList.remove('d-none');
-        noTicketsMessage.classList.add('d-none');
-        
-        // Clear existing tickets
-        while (ticketsList.children.length > 2) {
-          ticketsList.removeChild(ticketsList.lastChild);
-        }
-        
         const response = await fetch(`${API_BASE_URL}/contract/tickets`);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
         const data = await response.json();
+        console.log('Tickets Response:', data);
         
         if (data.success) {
-          if (data.data.length === 0) {
-            noTicketsMessage.classList.remove('d-none');
-          } else {
-            // Render tickets
+          if (data.data && data.data.length > 0) {
             data.data.forEach(ticket => {
-              const ticketCol = document.createElement('div');
-              ticketCol.className = 'col-md-4 mb-3';
-              
-              const eventDate = new Date(parseInt(ticket.eventTimestamp) * 1000);
-              
-              ticketCol.innerHTML = `
-                <div class="ticket-item">
-                  <h5>Ticket #${ticket.tokenId}</h5>
-                  <img src="${ticket.qrCodeUri}" alt="QR Code" class="img-fluid mb-2">
-                  <p><strong>Event Date:</strong> ${eventDate.toLocaleDateString()} ${eventDate.toLocaleTimeString()}</p>
-                  <p><strong>Status:</strong> ${ticket.isUsed ? '<span class="badge bg-danger">Used</span>' : '<span class="badge bg-success">Valid</span>'}</p>
-                  <a href="${ticket.qrCodeUri}" target="_blank" class="btn btn-sm btn-outline-primary">View QR</a>
-                  <a href="${ticket.mediaUri}" target="_blank" class="btn btn-sm btn-outline-secondary">View Media</a>
-                </div>
-              `;
-              
-              ticketsList.appendChild(ticketCol);
+              const ticketElement = createTicketElement(ticket);
+              ticketsContainer.appendChild(ticketElement);
             });
+          } else {
+            noTicketsMessage.classList.remove('d-none');
           }
         } else {
           showMessage(`Failed to fetch tickets: ${data.message}`, 'danger');
@@ -405,19 +411,58 @@
         console.error('Error fetching tickets:', error);
         showMessage(`Error fetching tickets: ${error.message}`, 'danger');
       } finally {
-        // Hide loading state
         ticketsLoading.classList.add('d-none');
       }
     }
 
-    // Event listeners
-    refreshStatusBtn.addEventListener('click', fetchStatus);
-    deployContractBtn.addEventListener('click', deployContract);
-    mintTicketForm.addEventListener('submit', mintTicket);
-    refreshTicketsBtn.addEventListener('click', fetchTickets);
+    // Create ticket element
+    function createTicketElement(ticket) {
+      const col = document.createElement('div');
+      col.className = 'col-md-4 mb-4';
+      
+      const now = Math.floor(Date.now() / 1000);
+      const isBeforeEvent = ticket.eventTimestamp > now;
+      
+      col.innerHTML = `
+        <div class="ticket-item">
+          <h5>Ticket #${ticket.tokenId}</h5>
+          <p><strong>Owner:</strong> ${shortenAddress(ticket.owner)}</p>
+          <p><strong>Event Date:</strong> ${formatTimestamp(ticket.eventTimestamp)}</p>
+          <p><strong>Status:</strong> 
+            <span class="badge ${isBeforeEvent ? 'bg-success' : 'bg-secondary'}">
+              ${isBeforeEvent ? 'Active' : 'Expired'}
+            </span>
+          </p>
+          <img src="${isBeforeEvent ? ticket.qrCodeUri : ticket.mediaUri}" 
+               alt="${isBeforeEvent ? 'QR Code' : 'Event Media'}" 
+               class="img-fluid mt-2">
+        </div>
+      `;
+      
+      return col;
+    }
 
-    // Initialize
-    document.addEventListener('DOMContentLoaded', fetchStatus);
+    // Helper function to shorten address
+    function shortenAddress(address) {
+      return address.substring(0, 6) + '...' + address.substring(address.length - 4);
+    }
+
+    // Helper function to format timestamp
+    function formatTimestamp(timestamp) {
+      const date = new Date(timestamp * 1000);
+      return date.toLocaleString();
+    }
+
+    // Event listeners
+    document.addEventListener('DOMContentLoaded', () => {
+      console.log('DOM loaded, initializing...');
+      fetchStatus();
+      
+      refreshStatusBtn.addEventListener('click', fetchStatus);
+      deployContractBtn.addEventListener('click', deployContract);
+      mintTicketForm.addEventListener('submit', mintTicket);
+      refreshTicketsBtn.addEventListener('click', fetchTickets);
+    });
   </script>
 </body>
 </html>
