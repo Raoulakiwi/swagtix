@@ -25,7 +25,16 @@ const PORT = process.env.PORT || 3000;
  * correct values from the `X-Forwarded-*` headers injected by the proxy.
  * See: https://expressjs.com/en/guide/behind-proxies.html
  */
-app.set('trust proxy', true);
+/**
+ * Security note:
+ *   Setting `trust proxy` to a blanket `true` is considered unsafe by
+ *   express-rate-limit because clients can spoof the `X-Forwarded-For`
+ *   header and bypass IP-based limits.  We instead:
+ *     • trust only local reverse–proxies (default: 'loopback')
+ *     • allow override via `TRUST_PROXY` env (e.g. '127.0.0.1')
+ */
+const TRUST_PROXY = process.env.TRUST_PROXY || 'loopback';
+app.set('trust proxy', TRUST_PROXY);
 
 // Ensure logs directory exists
 const logDir = path.dirname(process.env.LOG_FILE || './logs/admin-interface.log');
@@ -89,11 +98,17 @@ app.use((req, _res, next) => {
 });
 
 // Rate limiting
+/**
+ * Rate-limit:  uses `req.ip` taken from Express after the safe `trust proxy`
+ *   rules above.  Explicit `keyGenerator` avoids the permissive-proxy error.
+ */
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW || 15) * 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_MAX || 100),
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW || 15, 10) * 60 * 1000,
+  max: parseInt(process.env.RATE_LIMIT_MAX || 100, 10),
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  skipFailedRequests: true,
+  keyGenerator: (req /*, res*/) => req.ip
 });
 app.use(limiter);
 
