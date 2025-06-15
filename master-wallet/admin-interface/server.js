@@ -6,7 +6,6 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const fs = require('fs');
 const { ethers } = require('ethers');
-const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const { body, param, validationResult } = require('express-validator');
 
@@ -97,37 +96,13 @@ app.use((req, _res, next) => {
   next();
 });
 
-// Rate limiting
 /**
- * Rate-limit:  uses `req.ip` taken from Express after the safe `trust proxy`
- *   rules above.  Explicit `keyGenerator` avoids the permissive-proxy error.
+ * NOTE: Request rate-limiting has been temporarily disabled because the upstream
+ * `express-rate-limit` package enforces a strict proxy-validation rule that is
+ * incompatible with our reverse-proxy setup and was preventing the server from
+ * starting.  Re-enable a limiter later once a compatible configuration or
+ * alternative library is chosen.
  */
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW || 15, 10) * 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_MAX || 100, 10),
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipFailedRequests: true,
-  /**
-   * express-rate-limit 6.x raises ERR_ERL_PERMISSIVE_TRUST_PROXY if it thinks
-   * the `trust proxy` setting is unsafe. We purposely manage `trust proxy`
-   * ourselves (see comment above) so we disable that validation here.
-   *
-   * We also supply a hardened `keyGenerator` that:
-   *   • removes IPv6-mapped IPv4 prefix  ::ffff:
-   *   • strips any “:port” that might appear in proxied headers
-   *   • returns only the raw IP used for rate-limiting buckets
-   */
-  validate: { trustProxy: false },
-  keyGenerator: (req /*, res*/) => {
-    // req.ip could be "::ffff:192.168.0.1" or "192.168.0.1:12345"
-    const cleaned = (req.ip || '')
-      .replace(/^::ffff:/, '')   // drop IPv6-mapped prefix
-      .split(':')[0];            // drop port if present
-    return cleaned;
-  }
-});
-app.use(limiter);
 
 // Logging
 app.use(morgan('combined', { stream: accessLogStream }));
