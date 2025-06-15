@@ -49,7 +49,7 @@ const theme = createTheme({
     },
   },
   typography: {
-    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+    fontFamily: '\"Roboto\", \"Helvetica\", \"Arial\", sans-serif',
     h1: {
       fontWeight: 700,
     },

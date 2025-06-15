@@ -43,7 +43,7 @@ PM2_APP_NAME="swagtix-admin"
 # Path to React admin interface inside the repo
 REACT_SRC_DIR="$REPO_DIR/master-wallet/admin-interface/client/react-app"
 # Final location of the compiled React build on the live server
-REACT_BUILD_DIR="$APP_DIR/client/build"
+REACT_BUILD_DIR="$APP_DIR/client/react-app/build"
 
 # --- Colors for output ---
 GREEN='\033[0;32m'
@@ -128,7 +128,7 @@ elif [ -d "$REACT_SRC_DIR" ]; then
   # Decide whether to run npm ci or npm install
   # Use npm ci only when both node_modules **and** package-lock.json exist
   # This avoids the first-time deployment failure when node_modules exists
-  # (e.g., copied from an earlier incomplete run) but the lock-file is missing.
+  # (e.g., copied from an earlier incomplete run) but the lock-file is missing).
   if [[ -f "package-lock.json" && -d "node_modules" ]]; then
     log_info "package-lock.json and node_modules found – running npm ci"
     run_npm_cmd "npm ci for React app" npm ci --silent
@@ -182,7 +182,7 @@ log_success "Files copied to $APP_DIR."
 # 2.1 Ensure network configuration inside .env
 # ---------------------------------------------------------------------------
 # The backend prints its LAN URL in logs and sets default CORS rules based on
-# LOCAL_IP.  Make sure this value matches the server’s static LAN address
+# LOCAL_IP.  Make sure this value matches the server's static LAN address
 # (192.168.0.199 in our case).  If an .env does not yet exist, create a minimal
 # one so the server can start with sensible defaults.
 
@@ -201,7 +201,7 @@ if [ -f "$ENV_FILE" ]; then
 
   # Update or append CORS_ORIGIN to include the LAN address
   if grep -q '^CORS_ORIGIN=' "$ENV_FILE"; then
-    sudo sed -i "s/^CORS_ORIGIN=.*/CORS_ORIGIN=http:\/\/localhost:3000,http:\/\/${TARGET_IP}:3000/" "$ENV_FILE"
+    sudo sed -i "s/^CORS_ORIGIN=.*/CORS_ORIGIN=http:\\/\\/localhost:3000,http:\\/\\/${TARGET_IP}:3000/" "$ENV_FILE"
   else
     echo "CORS_ORIGIN=http://localhost:3000,http://${TARGET_IP}:3000" | sudo tee -a "$ENV_FILE" >/dev/null
   fi
@@ -302,34 +302,33 @@ fi
 log_info "Navigating to application directory for npm install: $APP_DIR"
 cd "$APP_DIR" || handle_error "Failed to change directory to $APP_DIR"
 
-log_info "Installing/updating Node.js dependencies..."
-npm install || handle_error "npm install failed"
-log_success "Node.js dependencies installed."
+log_info "Installing backend dependencies..."
+npm install || handle_error "Failed to install backend dependencies"
+log_success "Backend dependencies installed successfully."
 
 # 5. Restart the PM2 service
 log_info "Restarting PM2 service: $PM2_APP_NAME"
-
-# Stop and delete any existing PM2 process to guarantee a clean start
-if pm2 list | grep -q "$PM2_APP_NAME"; then
-  log_info "Stopping existing PM2 process..."
-  pm2 stop "$PM2_APP_NAME" || true
-  pm2 delete "$PM2_APP_NAME" || true
-fi
-
-# Use the start.sh script to handle password prompt & PM2 start
-"$APP_DIR/start.sh" || handle_error "Failed to start PM2 service via start.sh"
-
-# Basic health-check to ensure the server is listening on 0.0.0.0:3000
-log_info "Running post-deploy health check..."
-if curl -s --max-time 5 http://127.0.0.1:3000/api/status | grep -q '"success":true'; then
-  log_success "Backend responded successfully on 0.0.0.0:3000"
+if pm2 show "$PM2_APP_NAME" > /dev/null 2>&1; then
+  pm2 restart "$PM2_APP_NAME" || handle_error "Failed to restart PM2 service"
+  log_success "PM2 service restarted successfully."
 else
-  log_warn "Health check failed – backend did not respond on port 3000. Check PM2 logs."
+  log_info "PM2 service not found. Starting it..."
+  pm2 start ./start.sh --name "$PM2_APP_NAME" || handle_error "Failed to start PM2 service"
+  log_success "PM2 service started successfully."
+  
+  # Save PM2 process list so it survives server reboots
+  pm2 save || log_warn "Failed to save PM2 process list. Service may not restart automatically after reboot."
+  
+  # Ensure PM2 starts on boot (if not already set up)
+  pm2 startup | grep -q "sudo" && log_warn "You may need to run the PM2 startup command as root to enable automatic startup on boot."
 fi
 
-log_success "PM2 service restarted. Check logs with: pm2 logs $PM2_APP_NAME"
-
-log_success "SwagTix Admin Interface deployment complete!"
-log_info "Access your admin interface at http://your_private_ip:3000/dashboard"
-log_info "Remember to update the bytecode in $APP_DIR/abis/EventTicket1155.json if you haven't already."
-log_info "Also, ensure your wallet password is correctly set in $APP_DIR/.wallet_password or start.sh."
+log_success "Deployment completed successfully!"
+log_info "SwagTix Admin Interface is now accessible at:"
+log_info "  http://localhost:3000"
+log_info "  http://192.168.0.199"
+log_info ""
+log_info "If this is your first deployment, remember to:"
+log_info "1. Generate a master wallet using node master-wallet/generate-wallet.js"
+log_info "2. Configure the wallet password in $APP_DIR/.wallet_password or $APP_DIR/.env"
+log_info "3. Deploy the EventTicket1155 contract through the admin interface"

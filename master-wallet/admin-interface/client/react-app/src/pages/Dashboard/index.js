@@ -13,10 +13,10 @@ import {
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useSnackbar } from 'notistack';
 
-// Placeholder for API calls
+// Placeholder for API calls - In a real app, this would be a dedicated API service
 const api = {
   get: async (url) => {
-    // Simulate API call
+    // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 500));
     if (url === '/api/status') {
       return { data: { success: true, message: 'API is running' } };
@@ -89,9 +89,18 @@ function Dashboard() {
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Box sx={{ mb: 4, textAlign: 'center' }}>
+        <Typography variant="h3" component="h1" gutterBottom>
+          Welcome to SwagTix Admin!
+        </Typography>
+        <Typography variant="h6" color="text.secondary">
+          Manage your PulseChain NFT tickets and contracts.
+        </Typography>
+      </Box>
+
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" component="h1" gutterBottom>
-          Dashboard
+          System Overview
         </Typography>
         <Button
           variant="outlined"
@@ -187,6 +196,17 @@ function Dashboard() {
                 </Button>
               </Grid>
             </Grid>
+          </Paper>
+        </Grid>
+
+        {/* Recent Activity / Statistics (Placeholder) */}
+        <Grid item xs={12}>
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h6" gutterBottom>Recent Activity / Statistics</Typography>
+            <Divider sx={{ mb: 2 }} />
+            <Typography variant="body2" color="text.secondary">
+              No recent activity to display yet. This section will show recent deployments, ticket mints, or other relevant statistics.
+            </Typography>
           </Paper>
         </Grid>
       </Grid>

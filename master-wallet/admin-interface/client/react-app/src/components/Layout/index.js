@@ -23,7 +23,11 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useTheme } from '@mui/material/styles';
 
+// Assuming these assets exist in src/assets
+import LogoWithText from '../../assets/logo-with-text.svg';
+
 const drawerWidth = 240;
+const APP_VERSION = '1.0.0'; // Placeholder for application version
 
 function Layout() {
   const theme = useTheme();
@@ -35,9 +39,9 @@ function Layout() {
 
   const drawer = (
     <Box onClick={handleDrawerToggle} sx={{ textAlign: 'center' }}>
-      <Typography variant="h6" sx={{ my: 2, color: theme.palette.primary.main }}>
-        SwagTix Admin
-      </Typography>
+      <Box sx={{ my: 2 }}>
+        <img src={LogoWithText} alt="SwagTix Logo" style={{ width: '150px', height: 'auto' }} />
+      </Box>
       <Divider />
       <List>
         <ListItem disablePadding>
@@ -144,6 +148,11 @@ function Layout() {
         }}
       >
         <Outlet /> {/* This is where nested routes will be rendered */}
+        <Box sx={{ mt: 4, textAlign: 'center', color: 'text.secondary' }}>
+          <Typography variant="body2">
+            SwagTix Admin v{APP_VERSION} &copy; {new Date().getFullYear()}
+          </Typography>
+        </Box>
       </Box>
     </Box>
   );
