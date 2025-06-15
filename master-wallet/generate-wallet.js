@@ -162,10 +162,22 @@ async function main() {
         }
         
         console.log('\nEncrypting wallet... This may take a moment.');
-        const encryptedJson = await encryptWallet(wallet, password);
+        let encryptedJson;
+        try {
+          encryptedJson = await encryptWallet(wallet, password);
+        } catch (err) {
+          console.error('❌ Failed to encrypt wallet:', err.message);
+          rl.close();
+          return;
+        }
         
-        rl.question('Enter output directory path (default: ./master-wallet): ', (outputDir) => {
-          const dir = outputDir || './master-wallet';
+        // ------------------------------------------------------------------
+        // Default output directory is the location expected on the server so
+        // you can simply `git pull` and run the deploy script.
+        // ------------------------------------------------------------------
+        rl.question('Enter output directory path (default: /opt/swagtix/secure): ', (outputDir) => {
+          // Fallback to /opt/swagtix/secure if the user hits <Enter>
+          const dir = outputDir || '/opt/swagtix/secure';
           
           try {
             const paths = saveWalletInfo(wallet, encryptedJson, dir);
@@ -176,7 +188,13 @@ async function main() {
             console.log(`📁 README:           ${paths.readmePath}`);
             
             console.log('\n⚠️  IMPORTANT: Keep your password safe. If you lose it, you cannot recover the wallet.');
-            console.log('⚠️  Make sure to back up these files securely.\n');
+            console.log('⚠️  Make sure to back up these files securely.');
+            console.log('\n🔄 NEXT STEPS:');
+            console.log('1. On your server ensure the directory /opt/swagtix/secure exists and is readable by the "swagtix" user.');
+            console.log('2. Copy the encrypted-wallet.json file there if you generated it elsewhere.');
+            console.log('3. Set WALLET_PATH=/opt/swagtix/secure/encrypted-wallet.json in your .env (or leave blank – the default path matches).');
+            console.log('4. Put your wallet password in /opt/swagtix/app/.wallet_password or configure start.sh.');
+            console.log('5. Run the deploy script again and the wallet service should initialise.\n');
           } catch (error) {
             console.error('Error saving wallet information:', error);
           }
