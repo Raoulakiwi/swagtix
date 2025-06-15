@@ -14,13 +14,35 @@ class WalletService {
   /**
    * Initialize the wallet service
    */
-  async initialize(walletPath, walletPassword) {
+  /**
+   * @param {string} walletPassword - Password used to decrypt encrypted-wallet.json
+   * @returns {Promise<boolean>} true when the wallet is initialised
+   */
+  async initialize(walletPassword) {
     try {
-      // Set up provider
+      // -------------------------------------------------------------------
+      // 1. Provider
+      // -------------------------------------------------------------------
       const rpcUrl = process.env.PULSECHAIN_RPC_URL;
       this.provider = new ethers.providers.JsonRpcProvider(rpcUrl);
       
-      // Load the encrypted wallet JSON
+      // -------------------------------------------------------------------
+      // 2. Locate encrypted wallet file
+      // -------------------------------------------------------------------
+      const walletPath =
+        process.env.WALLET_PATH ||
+        path.join(__dirname, '..', '..', 'secure', 'encrypted-wallet.json');
+
+      if (!fs.existsSync(walletPath)) {
+        throw new Error(
+          `Encrypted wallet not found at ${walletPath}. ` +
+          `Set WALLET_PATH env var or place the wallet in the secure folder.`
+        );
+      }
+
+      // -------------------------------------------------------------------
+      // 3. Read & decrypt wallet
+      // -------------------------------------------------------------------
       const encryptedWallet = fs.readFileSync(walletPath, 'utf8');
       
       // Decrypt the wallet with the provided password
@@ -40,6 +62,16 @@ class WalletService {
       this.isInitialized = false;
       throw new Error(`Wallet initialization failed: ${error.message}`);
     }
+  }
+
+  /**
+   * Return an ethers.Signer for external services
+   */
+  getSigner() {
+    if (!this.isInitialized) {
+      throw new Error('Wallet not initialized');
+    }
+    return this.wallet;
   }
 
   /**
