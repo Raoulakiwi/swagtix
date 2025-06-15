@@ -308,9 +308,26 @@ log_success "Node.js dependencies installed."
 
 # 5. Restart the PM2 service
 log_info "Restarting PM2 service: $PM2_APP_NAME"
-# Use the start.sh script to handle password and PM2 restart
-"$APP_DIR/start.sh" || handle_error "Failed to restart PM2 service via start.sh"
-log_success "PM2 service restarted. Check logs for status: pm2 logs $PM2_APP_NAME"
+
+# Stop and delete any existing PM2 process to guarantee a clean start
+if pm2 list | grep -q "$PM2_APP_NAME"; then
+  log_info "Stopping existing PM2 process..."
+  pm2 stop "$PM2_APP_NAME" || true
+  pm2 delete "$PM2_APP_NAME" || true
+fi
+
+# Use the start.sh script to handle password prompt & PM2 start
+"$APP_DIR/start.sh" || handle_error "Failed to start PM2 service via start.sh"
+
+# Basic health-check to ensure the server is listening on 0.0.0.0:3000
+log_info "Running post-deploy health check..."
+if curl -s --max-time 5 http://127.0.0.1:3000/api/status | grep -q '"success":true'; then
+  log_success "Backend responded successfully on 0.0.0.0:3000"
+else
+  log_warn "Health check failed – backend did not respond on port 3000. Check PM2 logs."
+fi
+
+log_success "PM2 service restarted. Check logs with: pm2 logs $PM2_APP_NAME"
 
 log_success "SwagTix Admin Interface deployment complete!"
 log_info "Access your admin interface at http://your_private_ip:3000/dashboard"
