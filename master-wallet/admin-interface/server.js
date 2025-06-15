@@ -45,7 +45,24 @@ if (!fs.existsSync(logDir)) {
 const accessLogStream = fs.createWriteStream(process.env.LOG_FILE || './logs/admin-interface.log', { flags: 'a' });
 
 // Security middleware
-app.use(helmet());
+/**
+ * --------------------------------------------------------------------------
+ * Helmet security middleware
+ * --------------------------------------------------------------------------
+ * We disable Helmet’s built-in Content-Security-Policy for now because the
+ * Admin UI is a React single-page app served from this very domain. CRA’s
+ * production build injects runtime-generated asset names (hashes) which
+ * do **not** work with a strict CSP unless we painstakingly enumerate every
+ * hash or add ‘unsafe-inline’.  Since this interface is intended for
+ * internal/admin use behind authentication and a reverse-proxy firewall, we
+ * accept the small risk and turn the CSP off.  Tighten this later if you
+ * need a hardened public-facing deployment.
+ */
+app.use(
+  helmet({
+    contentSecurityPolicy: false
+  })
+);
 /**
  * CORS configuration
  * ------------------------------------------------------------------
@@ -97,11 +114,17 @@ app.use((req, _res, next) => {
 });
 
 /**
- * NOTE: Request rate-limiting has been temporarily disabled because the upstream
- * `express-rate-limit` package enforces a strict proxy-validation rule that is
- * incompatible with our reverse-proxy setup and was preventing the server from
- * starting.  Re-enable a limiter later once a compatible configuration or
- * alternative library is chosen.
+ * --------------------------------------------------------------------------
+ * Rate limiting
+ * --------------------------------------------------------------------------
+ * We previously attempted to use `express-rate-limit`, however version ≥7
+ * throws `ERR_ERL_PERMISSIVE_TRUST_PROXY` when `app.set('trust proxy', true)`
+ * (or other permissive values) is detected – a configuration that is
+ * required for our Nginx reverse-proxy setup.
+ *
+ * Until we migrate to a proxy-aware alternative or configure stricter IP
+ * validation, **rate limiting is disabled**.  Do **NOT** re-introduce
+ * express-rate-limit without first verifying proxy safety.
  */
 
 // Logging
