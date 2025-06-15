@@ -30,11 +30,29 @@ const accessLogStream = fs.createWriteStream(process.env.LOG_FILE || './logs/adm
 
 // Security middleware
 app.use(helmet());
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  credentials: true
-}));
+/**
+ * CORS configuration
+ * ------------------------------------------------------------------
+ *  - If an explicit CORS_ORIGIN env var is supplied we use that.
+ *  - Otherwise we default-allow the local dev hostnames AND
+ *    the static LAN address 192.168.0.199 so the dashboard can
+ *    be reached from other devices on the network without manual
+ *    re-configuration.
+ */
+const DEFAULT_ALLOWED_ORIGINS = [
+  'http://localhost',
+  'http://localhost:3000',
+  'http://192.168.0.199',
+  'http://192.168.0.199:3000'
+];
+
+app.use(
+  cors({
+    origin: process.env.CORS_ORIGIN || DEFAULT_ALLOWED_ORIGINS,
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true
+  })
+);
 
 // Rate limiting
 const limiter = rateLimit({
@@ -384,8 +402,12 @@ const startServer = async () => {
     }
     
     // Start server
-    app.listen(PORT, () => {
-      logger.info(`SwagTix Admin Interface running on port ${PORT}`);
+    const HOST = '0.0.0.0'; // bind to all interfaces so LAN devices can reach the server
+    app.listen(PORT, HOST, () => {
+      const localIP = process.env.LOCAL_IP || '192.168.0.199';
+      logger.info('SwagTix Admin Interface running and accessible at:');
+      logger.info(`  Local:   http://localhost:${PORT}`);
+      logger.info(`  Network: http://${localIP}:${PORT}`);
     });
   } catch (error) {
     logger.error('Failed to start server:', error);
