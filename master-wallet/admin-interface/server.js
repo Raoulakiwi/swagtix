@@ -108,7 +108,24 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipFailedRequests: true,
-  keyGenerator: (req /*, res*/) => req.ip
+  /**
+   * express-rate-limit 6.x raises ERR_ERL_PERMISSIVE_TRUST_PROXY if it thinks
+   * the `trust proxy` setting is unsafe. We purposely manage `trust proxy`
+   * ourselves (see comment above) so we disable that validation here.
+   *
+   * We also supply a hardened `keyGenerator` that:
+   *   • removes IPv6-mapped IPv4 prefix  ::ffff:
+   *   • strips any “:port” that might appear in proxied headers
+   *   • returns only the raw IP used for rate-limiting buckets
+   */
+  validate: { trustProxy: false },
+  keyGenerator: (req /*, res*/) => {
+    // req.ip could be "::ffff:192.168.0.1" or "192.168.0.1:12345"
+    const cleaned = (req.ip || '')
+      .replace(/^::ffff:/, '')   // drop IPv6-mapped prefix
+      .split(':')[0];            // drop port if present
+    return cleaned;
+  }
 });
 app.use(limiter);
 
