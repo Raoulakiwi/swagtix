@@ -8,6 +8,31 @@
 # Exit immediately if a command exits with a non-zero status.
 set -e
 
+# --- Command-line flags -------------------------------------------------------
+# -s | --simple : Skip React build/deploy (backend + plain HTML only)
+
+# Default
+SKIP_REACT=""
+
+for arg in "$@"; do
+  case $arg in
+    -s|--simple)
+      SKIP_REACT="1"
+      shift
+      ;;
+    -h|--help)
+      echo "Usage: $0 [-s|--simple]"
+      echo "  -s, --simple   Deploy backend & standalone dashboard only (skip React build)"
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $arg"
+      echo "Run with -h for help."
+      exit 1
+      ;;
+  esac
+done
+
 # --- Configuration ---
 # Path to your Git repository on the server (where you pull changes)
 REPO_DIR="$HOME/swagtix"
@@ -54,6 +79,10 @@ handle_error() {
 # --- Main Deployment Process ---
 
 log_info "Starting SwagTix Admin Interface deployment..."
+
+if [ -n "$SKIP_REACT" ]; then
+  log_info "Running in SIMPLE mode (React build skipped)."
+fi
 
 # 1. Navigate to repository and pull latest changes
 log_info "Navigating to repository directory: $REPO_DIR"

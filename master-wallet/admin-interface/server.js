@@ -68,7 +68,7 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-// Middleware to ensure wallet and contract services are initialized for protected routes
+// Middleware to ensure wallet service is initialized for protected routes
 const ensureWalletInitialized = (req, res, next) => {
   if (!walletService.isInitialized) {
     return res.status(503).json({
@@ -79,6 +79,7 @@ const ensureWalletInitialized = (req, res, next) => {
   next();
 };
 
+// Middleware to ensure both wallet and contract services are initialized for protected routes
 const ensureServicesInitialized = (req, res, next) => {
   if (!walletService.isInitialized) {
     return res.status(503).json({
@@ -271,7 +272,7 @@ app.get(`${process.env.API_BASE_URL || '/api/v1'}/contract/tickets`, ensureServi
   }
 });
 
-// Serve static files in production
+// Serve static files
 const clientBuildPath = path.join(__dirname, 'client/build');
 // Path to standalone dashboard file (used when React build not yet generated)
 const dashboardPath = path.join(__dirname, 'client', 'dashboard.html');
@@ -320,138 +321,79 @@ if (fs.existsSync(clientBuildPath)) {
             <p>The backend API server is running. To proceed, please ensure:</p>
             <ol>
               <li>You have generated your master wallet and placed <code>encrypted-wallet.json</code> in <code>/opt/swagtix/secure/</code>.</li>
-              <li>Your <code>.env</code> file in <code>/opt/swagtix/app/</code> is correctly configured with <code>WALLET_PATH</code> and other secrets.</li>
-              <li>You have run the <code>start.sh</code> script with your wallet password.</li>
-              <li>The frontend application is built and copied to <code>/opt/swagtix/app/client/build/</code>.</li>
+              <li>Your <code>.env</code> file is properly configured with <code>WALLET_PASSWORD</code> or you've created a <code>.wallet_password</code> file.</li>
+              <li>You've placed the <code>dashboard.html</code> file in the <code>client</code> directory.</li>
             </ol>
-            <p>Check the server logs for more details: <code>pm2 logs swagtix-admin</code></p>
-            <a href="/api/status" class="btn">Check API Status</a>
+            <p>Once these steps are complete, restart the server and navigate to <a href="/dashboard">/dashboard</a>.</p>
           </div>
         </div>
       </body>
       </html>
-    `);
+      `);
     });
   }
 }
 
-// Function to get wallet password from file or environment variable
-async function getWalletPassword() {
-  console.log("--- PASSWORD DEBUGGING START ---");
-  
-  const passwordFilePath = path.join(__dirname, '.wallet_password');
-  console.log(`Looking for password file at: ${passwordFilePath}`);
-  
-  if (fs.existsSync(passwordFilePath)) {
-    console.log("Password file found");
-    try {
-      // Read raw file content
-      const rawPassword = fs.readFileSync(passwordFilePath, 'utf8');
-      
-      // Debug info
-      console.log(`Raw password length: ${rawPassword.length}`);
-      console.log(`Raw password last character code: ${rawPassword.charCodeAt(rawPassword.length - 1)}`);
-      
-      // If last char is newline (10), log it
-      if (rawPassword.charCodeAt(rawPassword.length - 1) === 10) {
-        console.log("WARNING: Password ends with newline character (10)");
-      }
-      
-      // Convert to hex for debugging (shows invisible chars)
-      let hexRepresentation = '';
-      for (let i = 0; i < rawPassword.length; i++) {
-        hexRepresentation += rawPassword.charCodeAt(i).toString(16).padStart(2, '0') + ' ';
-      }
-      console.log(`Password hex representation: ${hexRepresentation}`);
-      
-      // Trim all whitespace
-      const trimmedPassword = rawPassword.trim();
-      console.log(`Trimmed password length: ${trimmedPassword.length}`);
-      
-      // Compare
-      if (rawPassword.length !== trimmedPassword.length) {
-        console.log(`WARNING: Trimmed ${rawPassword.length - trimmedPassword.length} whitespace characters`);
-      }
-      
-      // Show first and last character for validation
-      if (trimmedPassword.length > 0) {
-        console.log(`First character: ${trimmedPassword[0]}`);
-        console.log(`Last character: ${trimmedPassword[trimmedPassword.length - 1]}`);
-      }
-      
-      console.log("--- PASSWORD DEBUGGING END ---");
-      return trimmedPassword;
-    } catch (error) {
-      console.error('Error reading password file:', error.message);
-    }
-  } else {
-    console.log("Password file not found!");
-  }
-  
-  // Fallback to environment variable
-  if (process.env.WALLET_PASSWORD) {
-    console.log("Using password from environment variable");
-    const envPassword = process.env.WALLET_PASSWORD.trim();
-    console.log(`Env password length: ${envPassword.length}`);
-    console.log("--- PASSWORD DEBUGGING END ---");
-    return envPassword;
-  }
-  
-  console.error('No wallet password available');
-  console.log("--- PASSWORD DEBUGGING END ---");
-  return null;
-}
-
-// Start server
-async function startServer() {
+// Function to get the wallet password from file or environment variable
+const getWalletPassword = () => {
   try {
-    // Start the server first
-    app.listen(PORT, '0.0.0.0', () => {
-      logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
-      logger.info(`Access the admin interface at http://localhost:${PORT}`);
-    });
-    
-    // Get wallet password
-    const walletPassword = await getWalletPassword();
-    if (!walletPassword) {
-      logger.error('No wallet password available. Cannot initialize wallet.');
-      return;
+    // Try to read from .wallet_password file first
+    const passwordFilePath = process.env.WALLET_PASSWORD_FILE || '.wallet_password';
+    if (fs.existsSync(passwordFilePath)) {
+      const rawPassword = fs.readFileSync(passwordFilePath, 'utf8');
+      // Log password details for debugging (length and hex representation)
+      logger.debug(`Read password from file. Raw length: ${rawPassword.length}`);
+      logger.debug(`Password hex: ${Buffer.from(rawPassword).toString('hex')}`);
+      
+      // Trim the password to avoid whitespace issues
+      const trimmedPassword = rawPassword.trim();
+      logger.debug(`Trimmed password length: ${trimmedPassword.length}`);
+      
+      return trimmedPassword;
     }
     
+    // Fall back to environment variable
+    if (process.env.WALLET_PASSWORD) {
+      const envPassword = process.env.WALLET_PASSWORD.trim();
+      logger.debug(`Using password from environment variable. Length: ${envPassword.length}`);
+      return envPassword;
+    }
+    
+    throw new Error('Wallet password not found in file or environment variables');
+  } catch (error) {
+    logger.error('Error reading wallet password:', error);
+    throw error;
+  }
+};
+
+// Start server function
+const startServer = async () => {
+  try {
     // Initialize wallet service
+    const walletPassword = getWalletPassword();
+    await walletService.initialize(walletPassword);
+    logger.info('Wallet service initialized successfully');
+    
+    // Try to initialize contract service if address is available
     try {
-      const walletPath = process.env.WALLET_PATH;
-      if (!walletPath || !fs.existsSync(walletPath)) {
-        logger.error(`Wallet file not found at ${walletPath || 'undefined path'}`);
-        return;
-      }
-      
-      const walletInitialized = await walletService.initialize(walletPath, walletPassword);
-      if (!walletInitialized) {
-        logger.error('Wallet initialization failed: Error: Wallet initialization failed');
-        return;
-      }
-      
-      logger.info('Wallet service initialized successfully');
-      
-      // Initialize contract service after wallet is initialized
-      const contractInitialized = await contractService.initialize();
-      if (contractInitialized) {
-        logger.info('Contract service initialized successfully');
-      } else {
-        logger.warn('Contract service not initialized. Deploy a contract or configure the contract address.');
-      }
+      await contractService.initialize(walletService.getSigner());
+      logger.info('Contract service initialized successfully');
     } catch (error) {
-      logger.error('Wallet initialization failed:', error);
+      logger.warn('Contract service initialization skipped:', error.message);
+      logger.info('You can deploy a new contract through the admin interface');
     }
+    
+    // Start server
+    app.listen(PORT, () => {
+      logger.info(`SwagTix Admin Interface running on port ${PORT}`);
+    });
   } catch (error) {
     logger.error('Failed to start server:', error);
     process.exit(1);
   }
-}
+};
 
 // Start the server
 startServer();
 
-// Export app for testing
-module.exports = app;
+module.exports = app; // Export for testing

@@ -6,22 +6,29 @@
   <title>SwagTix Admin Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body { padding-top: 20px; background-color: #f8f9fa; }
+    body { padding-top: 20px; background-color: #f8f9fa; font-family: Arial, sans-serif; }
     .container { max-width: 960px; margin: 0 auto; }
     .card { margin-bottom: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.1); border-radius: 8px; }
-    .card-header { background-color: #0d6efd; color: white; border-radius: 8px 8px 0 0; }
-    .btn-primary { background-color: #0d6efd; border-color: #0d6efd; }
-    .btn-primary:hover { background-color: #0b5ed7; border-color: #0a58ca; }
+    .card-header { background-color: #7B5BFF; /* SwagTix purple */ color: white; border-radius: 8px 8px 0 0; }
+    .btn-primary { background-color: #7B5BFF; border-color: #7B5BFF; }
+    .btn-primary:hover { background-color: #00A3FF; border-color: #00A3FF; } /* SwagTix blue */
+    .btn-secondary { background-color: #FF3D8A; border-color: #FF3D8A; } /* SwagTix pink */
+    .btn-secondary:hover { background-color: #D6226D; border-color: #D6226D; }
     .alert-info { background-color: #e0f7fa; border-color: #b2ebf2; color: #006064; }
     .alert-success { background-color: #e8f5e9; border-color: #c8e6c9; color: #2e7d32; }
     .alert-danger { background-color: #ffebee; border-color: #ffcdd2; color: #c62828; }
+    .alert-warning { background-color: #fff3cd; border-color: #ffecb5; color: #664d03; }
     .form-label { font-weight: bold; }
     .loading-spinner { display: flex; justify-content: center; align-items: center; height: 100px; }
     .spinner-border { width: 3rem; height: 3rem; }
     .ticket-item { border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 10px; background-color: #fff; }
     .ticket-item img { max-width: 100%; height: auto; border-radius: 4px; margin-bottom: 10px; }
-    .ticket-item h5 { margin-bottom: 5px; color: #0d6efd; }
+    .ticket-item h5 { margin-bottom: 5px; color: #7B5BFF; }
     .ticket-item p { margin-bottom: 3px; font-size: 0.9em; }
+    .badge-success { background-color: #28a745 !important; }
+    .badge-danger { background-color: #dc3545 !important; }
+    .badge-warning { background-color: #ffc107 !important; }
+    .badge-info { background-color: #17a2b8 !important; }
   </style>
 </head>
 <body>
@@ -57,7 +64,7 @@
       </div>
       <div class="card-body">
         <div id="contract-deployed-info" class="d-none">
-          <p><strong>EventTicket1155 Contract:</strong> <span id="contract-address" class="badge bg-success">Deployed</span></p>
+          <p><strong>EventTicket1155 Contract:</strong> <span id="contract-status-badge" class="badge bg-success">Deployed</span></p>
           <p>Contract Address: <code id="deployed-contract-address"></code></p>
           <a id="explorer-link" href="#" target="_blank" class="btn btn-sm btn-outline-info">View on Explorer</a>
           <hr>
@@ -105,9 +112,9 @@
             <label for="mediaUri" class="form-label">Media URI (Post-Event)</label>
             <input type="url" class="form-control" id="mediaUri" required placeholder="https://example.com/event_media.mp4">
           </div>
-          <button type="submit" class="btn btn-primary" id="mint-btn">Mint Ticket</button>
+          <button type="submit" class="btn btn-secondary" id="mint-btn">Mint Ticket</button>
           <div id="mint-loading" class="loading-spinner d-none">
-            <div class="spinner-border text-primary" role="status">
+            <div class="spinner-border text-secondary" role="status">
               <span class="visually-hidden">Loading...</span>
             </div>
             <p class="ms-2">Minting tickets, please wait...</p>
@@ -117,11 +124,11 @@
         <hr>
 
         <h4>Existing Tickets</h4>
-        <button class="btn btn-sm btn-outline-primary mb-3" id="refresh-tickets">Refresh Tickets</button>
+        <button class="btn btn-sm btn-outline-secondary mb-3" id="refresh-tickets">Refresh Tickets</button>
         <div id="tickets-list" class="row">
           <p id="no-tickets-message" class="col-12 text-muted d-none">No tickets found.</p>
           <div id="tickets-loading" class="loading-spinner col-12">
-            <div class="spinner-border text-primary" role="status">
+            <div class="spinner-border text-secondary" role="status">
               <span class="visually-hidden">Loading...</span>
             </div>
             <p class="ms-2">Loading tickets...</p>
@@ -142,30 +149,22 @@
     const walletBalanceSpan = document.getElementById('wallet-balance');
     const networkNameSpan = document.getElementById('network-name');
     const refreshStatusBtn = document.getElementById('refresh-status');
-
-    const contractManagementSection = document.getElementById('contract-management-section');
     const contractDeployedInfo = document.getElementById('contract-deployed-info');
-    const deployedContractAddressSpan = document.getElementById('deployed-contract-address');
-    const explorerLink = document.getElementById('explorer-link');
     const contractDeployForm = document.getElementById('contract-deploy-form');
     const deployContractBtn = document.getElementById('deploy-contract-btn');
     const deployLoading = document.getElementById('deploy-loading');
-
+    const deployedContractAddress = document.getElementById('deployed-contract-address');
+    const explorerLink = document.getElementById('explorer-link');
     const ticketManagementSection = document.getElementById('ticket-management-section');
     const mintTicketForm = document.getElementById('mint-ticket-form');
-    const mintToInput = document.getElementById('mintTo');
-    const mintAmountInput = document.getElementById('mintAmount');
-    const eventTimestampInput = document.getElementById('eventTimestamp');
-    const qrCodeUriInput = document.getElementById('qrCodeUri');
-    const mediaUriInput = document.getElementById('mediaUri');
-    const mintBtn = document.getElementById('mint-btn');
     const mintLoading = document.getElementById('mint-loading');
-    const refreshTicketsBtn = document.getElementById('refresh-tickets');
-    const ticketsListDiv = document.getElementById('tickets-list');
-    const noTicketsMessage = document.getElementById('no-tickets-message');
+    const ticketsList = document.getElementById('tickets-list');
     const ticketsLoading = document.getElementById('tickets-loading');
+    const noTicketsMessage = document.getElementById('no-tickets-message');
+    const refreshTicketsBtn = document.getElementById('refresh-tickets');
 
-    function showMessage(message, type = 'info') {
+    // Show message function
+    function showMessage(message, type = 'info', timeout = 5000) {
       const alertDiv = document.createElement('div');
       alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
       alertDiv.role = 'alert';
@@ -174,214 +173,241 @@
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       `;
       statusMessages.appendChild(alertDiv);
-      setTimeout(() => alertDiv.remove(), 5000); // Auto-remove after 5 seconds
+      
+      if (timeout) {
+        setTimeout(() => {
+          alertDiv.classList.remove('show');
+          setTimeout(() => alertDiv.remove(), 150);
+        }, timeout);
+      }
     }
 
+    // Fetch status from API
     async function fetchStatus() {
-      // Fetch API server status
       try {
-        const response = await fetch('/api/status');
-        const data = await response.json();
-        if (data.success) {
+        // Check API status
+        const apiResponse = await fetch('/api/status');
+        const apiData = await apiResponse.json();
+        
+        if (apiData.success) {
           apiStatusSpan.textContent = 'Online';
           apiStatusSpan.className = 'badge bg-success';
         } else {
-          apiStatusSpan.textContent = 'Offline';
+          apiStatusSpan.textContent = 'Error';
           apiStatusSpan.className = 'badge bg-danger';
-          showMessage('Backend API is not fully functional. Check server logs.', 'danger');
         }
-      } catch (error) {
-        apiStatusSpan.textContent = 'Offline';
-        apiStatusSpan.className = 'badge bg-danger';
-        showMessage('Could not connect to backend API. Server might be down.', 'danger');
-        console.error('Error fetching API status:', error);
-      }
-
-      // Fetch Wallet and Contract status
-      try {
-        const walletStatusRes = await fetch(`${API_BASE_URL}/wallet/status`);
-        const walletStatusData = await walletStatusRes.json();
-
-        if (walletStatusData.success && walletStatusData.status === 'connected') {
-          walletStatusSpan.textContent = 'Connected';
-          walletStatusSpan.className = 'badge bg-success';
-          walletAddressSpan.textContent = walletStatusData.address;
-
-          // Fetch wallet balance
-          const balanceRes = await fetch(`${API_BASE_URL}/wallet/balance`);
-          const balanceData = await balanceRes.json();
-          if (balanceData.success) {
-            walletBalanceSpan.textContent = balanceData.balance;
+        
+        // Check wallet status
+        const walletResponse = await fetch(`${API_BASE_URL}/wallet/status`);
+        if (walletResponse.ok) {
+          const walletData = await walletResponse.json();
+          
+          if (walletData.success) {
+            walletStatusSpan.textContent = 'Connected';
+            walletStatusSpan.className = 'badge bg-success';
+            walletAddressSpan.textContent = walletData.address;
+            networkNameSpan.textContent = walletData.network || 'PulseChain';
+            
+            // Get wallet balance
+            const balanceResponse = await fetch(`${API_BASE_URL}/wallet/balance`);
+            const balanceData = await balanceResponse.json();
+            
+            if (balanceData.success) {
+              walletBalanceSpan.textContent = balanceData.balance;
+            } else {
+              walletBalanceSpan.textContent = 'Error loading balance';
+            }
+          } else {
+            walletStatusSpan.textContent = 'Error';
+            walletStatusSpan.className = 'badge bg-danger';
+            walletAddressSpan.textContent = 'Not connected';
+            walletBalanceSpan.textContent = 'N/A';
           }
+        } else if (walletResponse.status === 503) {
+          walletStatusSpan.textContent = 'Not Initialized';
+          walletStatusSpan.className = 'badge bg-warning';
+          walletAddressSpan.textContent = 'Wallet service not initialized';
+          walletBalanceSpan.textContent = 'N/A';
         } else {
-          walletStatusSpan.textContent = 'Not Connected';
+          walletStatusSpan.textContent = 'Error';
           walletStatusSpan.className = 'badge bg-danger';
-          walletAddressSpan.textContent = 'Not connected';
-          walletBalanceSpan.textContent = '0.0';
-          showMessage('Wallet is not connected. Check server logs.', 'warning');
+          walletAddressSpan.textContent = 'Error connecting to wallet';
+          walletBalanceSpan.textContent = 'N/A';
+        }
+        
+        // Check contract status
+        const contractResponse = await fetch(`${API_BASE_URL}/contract/status`);
+        const contractData = await contractResponse.json();
+        
+        if (contractData.success && contractData.isInitialized) {
+          // Contract is deployed
+          contractDeployedInfo.classList.remove('d-none');
+          contractDeployForm.classList.add('d-none');
+          deployedContractAddress.textContent = contractData.contractAddress;
+          
+          // Set explorer link
+          explorerLink.href = `https://scan.pulsechain.com/address/${contractData.contractAddress}`;
+          
+          // Show ticket management section
+          ticketManagementSection.classList.remove('d-none');
+          
+          // Fetch tickets
+          fetchTickets();
+        } else {
+          // Contract not deployed
+          contractDeployedInfo.classList.add('d-none');
+          contractDeployForm.classList.remove('d-none');
+          ticketManagementSection.classList.add('d-none');
         }
       } catch (error) {
+        console.error('Error fetching status:', error);
+        apiStatusSpan.textContent = 'Error';
+        apiStatusSpan.className = 'badge bg-danger';
         walletStatusSpan.textContent = 'Error';
         walletStatusSpan.className = 'badge bg-danger';
-        showMessage('Error fetching wallet status. Wallet might not be initialized.', 'warning');
-        console.error('Error fetching wallet status:', error);
-      }
-
-      // Fetch Contract status
-      try {
-        const contractStatusRes = await fetch(`${API_BASE_URL}/contract/status`);
-        const contractStatusData = await contractStatusRes.json();
-
-        if (contractStatusData.success) {
-          if (contractStatusData.isInitialized && contractStatusData.contractAddress) {
-            // Contract is deployed
-            contractDeployedInfo.classList.remove('d-none');
-            contractDeployForm.classList.add('d-none');
-            deployedContractAddressSpan.textContent = contractStatusData.contractAddress;
-            explorerLink.href = `https://scan.pulsechain.com/address/${contractStatusData.contractAddress}`;
-            
-            // Show ticket management section
-            ticketManagementSection.classList.remove('d-none');
-            
-            // Fetch existing tickets
-            fetchTickets();
-          } else {
-            // Contract is not deployed
-            contractDeployedInfo.classList.add('d-none');
-            contractDeployForm.classList.remove('d-none');
-            ticketManagementSection.classList.add('d-none');
-          }
-        } else {
-          showMessage('Error fetching contract status.', 'warning');
-        }
-      } catch (error) {
-        showMessage('Error fetching contract status. Contract service might not be initialized.', 'warning');
-        console.error('Error fetching contract status:', error);
+        showMessage(`Failed to fetch status: ${error.message}`, 'danger');
       }
     }
 
+    // Deploy contract
     async function deployContract() {
       try {
+        // Show loading state
         deployContractBtn.disabled = true;
         deployLoading.classList.remove('d-none');
-
+        
         const response = await fetch(`${API_BASE_URL}/contract/deploy`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-          },
+            'Content-Type': 'application/json'
+          }
         });
-
+        
         const data = await response.json();
         
         if (data.success) {
-          showMessage(`Contract deployed successfully at address: ${data.data.address}`, 'success');
+          showMessage(`Contract deployed successfully at ${data.data.address}`, 'success');
           // Refresh status to update UI
-          await fetchStatus();
+          fetchStatus();
         } else {
           showMessage(`Failed to deploy contract: ${data.message}`, 'danger');
         }
       } catch (error) {
-        showMessage(`Error deploying contract: ${error.message}`, 'danger');
         console.error('Error deploying contract:', error);
+        showMessage(`Error deploying contract: ${error.message}`, 'danger');
       } finally {
+        // Hide loading state
         deployContractBtn.disabled = false;
         deployLoading.classList.add('d-none');
       }
     }
 
+    // Mint ticket
     async function mintTicket(event) {
       event.preventDefault();
       
       try {
-        mintBtn.disabled = true;
+        // Get form values
+        const to = document.getElementById('mintTo').value;
+        const amount = document.getElementById('mintAmount').value;
+        const eventTimestamp = document.getElementById('eventTimestamp').value;
+        const qrCodeUri = document.getElementById('qrCodeUri').value;
+        const mediaUri = document.getElementById('mediaUri').value;
+        
+        // Show loading state
+        document.getElementById('mint-btn').disabled = true;
         mintLoading.classList.remove('d-none');
-
-        const ticketData = {
-          to: mintToInput.value,
-          amount: parseInt(mintAmountInput.value),
-          eventTimestamp: parseInt(eventTimestampInput.value),
-          qrCodeUri: qrCodeUriInput.value,
-          mediaUri: mediaUriInput.value
-        };
-
+        
         const response = await fetch(`${API_BASE_URL}/contract/mint`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
+            'Content-Type': 'application/json'
           },
-          body: JSON.stringify(ticketData)
+          body: JSON.stringify({
+            to,
+            amount: parseInt(amount),
+            eventTimestamp: parseInt(eventTimestamp),
+            qrCodeUri,
+            mediaUri
+          })
         });
-
+        
         const data = await response.json();
         
         if (data.success) {
-          showMessage(`Ticket minted successfully! Token ID: ${data.data.tokenId}`, 'success');
+          showMessage(`Successfully minted ${amount} ticket(s) with token ID ${data.data.tokenId}`, 'success');
           // Clear form
           mintTicketForm.reset();
           // Refresh tickets list
-          await fetchTickets();
+          fetchTickets();
         } else {
-          showMessage(`Failed to mint ticket: ${data.message}`, 'danger');
+          showMessage(`Failed to mint ticket: ${data.message || 'Unknown error'}`, 'danger');
         }
       } catch (error) {
-        showMessage(`Error minting ticket: ${error.message}`, 'danger');
         console.error('Error minting ticket:', error);
+        showMessage(`Error minting ticket: ${error.message}`, 'danger');
       } finally {
-        mintBtn.disabled = false;
+        // Hide loading state
+        document.getElementById('mint-btn').disabled = false;
         mintLoading.classList.add('d-none');
       }
     }
 
+    // Fetch tickets
     async function fetchTickets() {
       try {
+        // Show loading state
         ticketsLoading.classList.remove('d-none');
         noTicketsMessage.classList.add('d-none');
         
         // Clear existing tickets
-        while (ticketsListDiv.firstChild) {
-          if (ticketsListDiv.firstChild.id === 'tickets-loading' || ticketsListDiv.firstChild.id === 'no-tickets-message') {
-            break;
-          }
-          ticketsListDiv.removeChild(ticketsListDiv.firstChild);
+        while (ticketsList.children.length > 2) {
+          ticketsList.removeChild(ticketsList.lastChild);
         }
-
+        
         const response = await fetch(`${API_BASE_URL}/contract/tickets`);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
         
         if (data.success) {
           if (data.data.length === 0) {
             noTicketsMessage.classList.remove('d-none');
           } else {
+            // Render tickets
             data.data.forEach(ticket => {
-              const ticketElement = document.createElement('div');
-              ticketElement.className = 'col-md-6 mb-3';
-              ticketElement.innerHTML = `
+              const ticketCol = document.createElement('div');
+              ticketCol.className = 'col-md-4 mb-3';
+              
+              const eventDate = new Date(parseInt(ticket.eventTimestamp) * 1000);
+              
+              ticketCol.innerHTML = `
                 <div class="ticket-item">
                   <h5>Ticket #${ticket.tokenId}</h5>
-                  <p><strong>Event Date:</strong> ${formatDate(ticket.eventTimestamp)}</p>
-                  <p><strong>QR Code:</strong> <a href="${ticket.qrCodeUri}" target="_blank">View QR Code</a></p>
-                  <p><strong>Media:</strong> <a href="${ticket.mediaUri}" target="_blank">View Media</a></p>
-                  <img src="${ticket.qrCodeUri}" alt="QR Code" class="img-fluid">
+                  <img src="${ticket.qrCodeUri}" alt="QR Code" class="img-fluid mb-2">
+                  <p><strong>Event Date:</strong> ${eventDate.toLocaleDateString()} ${eventDate.toLocaleTimeString()}</p>
+                  <p><strong>Status:</strong> ${ticket.isUsed ? '<span class="badge bg-danger">Used</span>' : '<span class="badge bg-success">Valid</span>'}</p>
+                  <a href="${ticket.qrCodeUri}" target="_blank" class="btn btn-sm btn-outline-primary">View QR</a>
+                  <a href="${ticket.mediaUri}" target="_blank" class="btn btn-sm btn-outline-secondary">View Media</a>
                 </div>
               `;
-              ticketsListDiv.appendChild(ticketElement);
+              
+              ticketsList.appendChild(ticketCol);
             });
           }
         } else {
           showMessage(`Failed to fetch tickets: ${data.message}`, 'danger');
         }
       } catch (error) {
-        showMessage(`Error fetching tickets: ${error.message}`, 'danger');
         console.error('Error fetching tickets:', error);
+        showMessage(`Error fetching tickets: ${error.message}`, 'danger');
       } finally {
+        // Hide loading state
         ticketsLoading.classList.add('d-none');
       }
-    }
-
-    function formatDate(timestamp) {
-      const date = new Date(timestamp * 1000);
-      return date.toLocaleString();
     }
 
     // Event listeners
@@ -390,13 +416,8 @@
     mintTicketForm.addEventListener('submit', mintTicket);
     refreshTicketsBtn.addEventListener('click', fetchTickets);
 
-    // Set default event timestamp to tomorrow
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    eventTimestampInput.value = Math.floor(tomorrow.getTime() / 1000);
-
     // Initialize
-    fetchStatus();
+    document.addEventListener('DOMContentLoaded', fetchStatus);
   </script>
 </body>
 </html>
