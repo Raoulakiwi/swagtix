@@ -183,13 +183,13 @@ log_success "Files copied to $APP_DIR."
 # ---------------------------------------------------------------------------
 # The backend prints its LAN URL in logs and sets default CORS rules based on
 # LOCAL_IP.  Make sure this value matches the server's static LAN address
-# (192.168.0.199 in our case).  If an .env does not yet exist, create a minimal
+# (192.168.0.143 in our case).  If an .env does not yet exist, create a minimal
 # one so the server can start with sensible defaults.
 
 log_info "Ensuring .env has correct LOCAL_IP and CORS_ORIGIN settings..."
 
 ENV_FILE="$APP_DIR/.env"
-TARGET_IP="192.168.0.199"
+TARGET_IP="192.168.0.143"
 
 if [ -f "$ENV_FILE" ]; then
   # Update or append LOCAL_IP
@@ -326,7 +326,7 @@ fi
 log_success "Deployment completed successfully!"
 log_info "SwagTix Admin Interface is now accessible at:"
 log_info "  http://localhost:3000"
-log_info "  http://192.168.0.199"
+log_info "  http://192.168.0.143"
 log_info ""
 log_info "If this is your first deployment, remember to:"
 log_info "1. Generate a master wallet using node master-wallet/generate-wallet.js"

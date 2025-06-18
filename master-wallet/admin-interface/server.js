@@ -68,15 +68,15 @@ app.use(
  * ------------------------------------------------------------------
  *  - If an explicit CORS_ORIGIN env var is supplied we use that.
  *  - Otherwise we default-allow the local dev hostnames AND
- *    the static LAN address 192.168.0.199 so the dashboard can
+ *    the static LAN address 192.168.0.143 so the dashboard can
  *    be reached from other devices on the network without manual
  *    re-configuration.
  */
 const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost',
   'http://localhost:3000',
-  'http://192.168.0.199',
-  'http://192.168.0.199:3000'
+  'http://192.168.0.143',
+  'http://192.168.0.143:3000'
 ];
 
 /**
@@ -495,7 +495,7 @@ const startServer = async () => {
     // Start server
     const HOST = '0.0.0.0'; // bind to all interfaces so LAN devices can reach the server
     app.listen(PORT, HOST, () => {
-      const localIP = process.env.LOCAL_IP || '192.168.0.199';
+      const localIP = process.env.LOCAL_IP || '192.168.0.143';
       logger.info('SwagTix Admin Interface running and accessible at:');
       logger.info(`  Local:   http://localhost:${PORT}`);
       logger.info(`  Network: http://${localIP}:${PORT}`);
