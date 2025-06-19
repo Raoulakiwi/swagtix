@@ -145,6 +145,19 @@ if [ -d "node_modules" ]; then
   rm -rf node_modules
 fi
 
+# ------------------------------------------------------------------
+# 3.5 Quick network test – ensure we can reach the Yarn registry
+# ------------------------------------------------------------------
+YARN_REGISTRY_URL="https://registry.yarnpkg.com"
+log_info "Checking connectivity to Yarn registry ($YARN_REGISTRY_URL)…"
+if ! curl -I --connect-timeout 5 --silent "$YARN_REGISTRY_URL" | grep -q "200 OK"; then
+  log_warn "Unable to reach $YARN_REGISTRY_URL."
+  log_warn "This may be a temporary outage or a network / proxy issue."
+  log_warn "Please verify internet connectivity, firewall or proxy settings and retry."
+  exit 1
+fi
+log_success "Yarn registry reachable."
+
 log_info "Cleaning Yarn cache for this project..."
 yarn cache clean
 
@@ -155,7 +168,20 @@ if [ -n "$USE_NPM" ]; then
 else
   log_info "Installing wallet dependencies using Yarn..."
   # --ignore-engines skips strict Node-engine checks (work-around for servers running Node <18)
-  yarn install --ignore-engines
+  # Capture output so we can print helpful diagnostics on failure
+  if ! yarn install --ignore-engines; then
+    log_error "yarn install failed."
+    log_warn "Common causes:"
+    log_warn "  • Temporary outage on registry.yarnpkg.com (retry in a few minutes)"
+    log_warn "  • Corporate proxy / firewall blocking the registry"
+    log_warn "  • Intermittent network connection"
+    log_warn ""
+    log_info "Troubleshooting tips:"
+    log_info "  1. Re-run this script with: yarn install --ignore-engines --network-timeout 100000"
+    log_info "  2. Configure proxy for Yarn: yarn config set https-proxy http://<proxy>:<port>"
+    log_info "  3. Try installing just the problematic package manually to identify the issue."
+    exit 1
+  fi
 fi
 
 # 5. Build the wallet
