@@ -92,6 +92,13 @@ need_sudo() {
 # --- Main Script ---
 log_info "Starting SwagTix wallet installation and build process..."
 
+# Warn if Node version is lower than recommended
+NODE_MAJOR="$(node -v | cut -d. -f1 | tr -d 'v')"
+if [ "$NODE_MAJOR" -lt 18 ]; then
+  log_warn "Detected Node.js v$(node -v). Some wallet dependencies expect Node >=18."
+  log_warn "Proceeding by ignoring engine checks during installation."
+fi
+
 # Check if wallet directory exists
 if [ ! -d "$WALLET_DIR" ]; then
   log_error "Wallet directory not found at $WALLET_DIR"
@@ -147,7 +154,8 @@ if [ -n "$USE_NPM" ]; then
   npm install --legacy-peer-deps
 else
   log_info "Installing wallet dependencies using Yarn..."
-  yarn install
+  # --ignore-engines skips strict Node-engine checks (work-around for servers running Node <18)
+  yarn install --ignore-engines
 fi
 
 # 5. Build the wallet
