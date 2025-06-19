@@ -1,7 +1,25 @@
-import type { Spender, TokenApproval } from '@/background/service/openapi';
 import type { ApprovalItem, NFTInfoHost } from '../utils/approval';
 import { TokenSpenderPair } from '@/types/permit2';
 import { obj2query, query2obj } from '@/ui/utils/url';
+
+// ---------------------------------------------------------------------------
+// Temporary placeholder types
+// The original Spender and TokenApproval interfaces came from
+// `@/background/service/openapi`, which has been removed during the
+// de-feature process.  Define minimal versions here so the build succeeds.
+// These should be replaced with proper definitions (or removed entirely)
+// once approval-related functionality is refactored or dropped.
+// ---------------------------------------------------------------------------
+interface Spender {
+  id: string;
+  // Allow any additional properties for now
+  [key: string]: any;
+}
+
+interface TokenApproval {
+  id: string;
+  [key: string]: any;
+}
 
 export type ApprovalSpenderItemToBeRevoked = {
   chainServerId: ApprovalItem['chain'];
