@@ -32,12 +32,18 @@ log_error() {
 }
 
 # --- Configuration ---
-# Path to your Git repository on the server (where you pull changes)
-REPO_DIR="$HOME/swagtix"
+# Resolve repository directory relative to this script’s location so it works
+# the same whether run with sudo or as a normal user.
+SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Repo root is one directory up from scripts/
+REPO_DIR="$(realpath "${SCRIPT_DIR}/..")"
+
 # Path to the wallet directory
 WALLET_DIR="$REPO_DIR/wallet"
 # Build type (pro, dev, debug)
 BUILD_TYPE="pro"
+# Force-npm flag (fallback if Yarn unavailable)
+USE_NPM=""
 
 # Parse command line arguments
 for arg in "$@"; do
@@ -70,6 +76,19 @@ for arg in "$@"; do
   esac
 done
 
+# If executed via sudo remember the invoking user’s home for Yarn global install
+ORIG_USER="${SUDO_USER:-$USER}"
+ORIG_HOME="$(eval echo "~${ORIG_USER}")"
+
+# Helper that prefixes sudo only when needed
+need_sudo() {
+  if [ "$(id -u)" -ne 0 ]; then
+    sudo "$@"
+  else
+    "$@"
+  fi
+}
+
 # --- Main Script ---
 log_info "Starting SwagTix wallet installation and build process..."
 
@@ -82,27 +101,28 @@ fi
 
 # 1. Check for Yarn
 log_info "Checking for Yarn installation..."
-if ! command -v yarn >/dev/null 2>&1; then
+if [ -z "$USE_NPM" ] && ! command -v yarn >/dev/null 2>&1; then
   log_info "Yarn not found. Installing Yarn..."
   
-  # 2. Install Yarn if not present
-  # First check if npm is available
-  if ! command -v npm >/dev/null 2>&1; then
-    log_error "npm is not installed. Please install Node.js and npm first."
-    log_info "Visit https://nodejs.org/ for installation instructions"
-    exit 1
+  # Try corepack (bundled with modern Node versions) first
+  if command -v corepack >/dev/null 2>&1; then
+    need_sudo corepack enable yarn
+  else
+    # Fallback to npm global install
+    if ! command -v npm >/dev/null 2>&1; then
+      log_error "npm is not installed. Please install Node.js and npm first."
+      exit 1
+    fi
+    need_sudo npm install -g yarn
   fi
-  
-  # Install Yarn using npm
-  npm install -g yarn
-  
-  # Verify installation
+
   if ! command -v yarn >/dev/null 2>&1; then
-    log_error "Failed to install Yarn. Please install it manually."
+    log_warn "Automatic Yarn installation failed."
+    log_warn "Either install Yarn manually or rerun with --use-npm to fall back to npm."
     exit 1
   fi
-  
-  log_success "Yarn installed successfully."
+
+  log_success "Yarn installed successfully: $(yarn --version)"
 else
   log_success "Yarn is already installed: $(yarn --version)"
 fi
@@ -121,13 +141,22 @@ fi
 log_info "Cleaning Yarn cache for this project..."
 yarn cache clean
 
-# 4. Install dependencies with Yarn
-log_info "Installing wallet dependencies using Yarn..."
-yarn install
+# 4. Install dependencies
+if [ -n "$USE_NPM" ]; then
+  log_info "Installing wallet dependencies using npm (legacy-peer-deps)..."
+  npm install --legacy-peer-deps
+else
+  log_info "Installing wallet dependencies using Yarn..."
+  yarn install
+fi
 
 # 5. Build the wallet
 log_info "Building wallet (${BUILD_TYPE} build)..."
-yarn "build:${BUILD_TYPE}"
+if [ -n "$USE_NPM" ]; then
+  npm run "build:${BUILD_TYPE}"
+else
+  yarn "build:${BUILD_TYPE}"
+fi
 
 log_success "Wallet built successfully!"
 log_info "Build output is available in: $WALLET_DIR/dist"
