@@ -222,13 +222,14 @@ log_info "Using node version: $(node -v)"
 log_info "Installing and building main wallet (Rabby fork)..."
 cd "$REPO_DIR/wallet" || handle_error "Cannot cd to $REPO_DIR/wallet"
 
-# Check if yarn.lock exists, use yarn if available, otherwise npm
-if [ -f "yarn.lock" ] && command -v yarn >/dev/null 2>&1; then
-  log_info "Using yarn for wallet dependencies"
+# Prefer Yarn (workspace-aware) for the wallet.  Fallback to npm only if Yarn
+# is not installed on the server.
+if command -v yarn >/dev/null 2>&1; then
+  log_info "Using yarn for wallet dependencies (recommended)"
   run_npm_cmd "yarn install for main wallet" yarn install --silent
   run_npm_cmd "build for main wallet" yarn build:pro --silent
 else
-  log_info "Using npm for wallet dependencies"
+  log_warn "Yarn not found – falling back to npm.  Consider installing Yarn for full workspace support."
   # Use legacy peer-deps to avoid strict peer-dependency resolution errors
   run_npm_cmd "npm install for main wallet" npm install --legacy-peer-deps --silent
   run_npm_cmd "build for main wallet" npm run build:pro --silent
