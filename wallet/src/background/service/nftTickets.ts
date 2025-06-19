@@ -84,10 +84,15 @@ class NFTTicketsService extends EventEmitter {
   /**
    * Get the contract instance for EventTicket1155
    */
-  private async getContract() {
+  private async getContract(signer?: ethers.Signer) {
     try {
       const provider = await walletController.getProvider(CHAINS.PULSE);
-      return new ethers.Contract(env.contracts.eventTicket, eventTicketABI, provider);
+      const contract = new ethers.Contract(
+        env.contracts.eventTicket, 
+        eventTicketABI, 
+        signer || provider
+      );
+      return contract;
     } catch (error) {
       console.error('Error getting contract:', error);
       throw new Error('Failed to connect to ticket contract');
@@ -116,7 +121,7 @@ class NFTTicketsService extends EventEmitter {
   /**
    * Get all tickets owned by an address
    */
-  public async getTickets(address: string, forceRefresh = false): Promise<Ticket[]> {
+  public async getTicketsByOwner(address: string, forceRefresh = false): Promise<Ticket[]> {
     try {
       // Check cache first if not forcing refresh
       if (!forceRefresh) {
@@ -278,7 +283,7 @@ class NFTTicketsService extends EventEmitter {
       // Get contract instance with signer
       const provider = await walletController.getProvider(CHAINS.PULSE);
       const signer = provider.getSigner(fromAddress);
-      const contract = new ethers.Contract(env.contracts.eventTicket, eventTicketABI, signer);
+      const contract = await this.getContract(signer);
       
       // Transfer the ticket
       const tx = await contract.safeTransferFrom(
@@ -302,6 +307,33 @@ class NFTTicketsService extends EventEmitter {
     } catch (error) {
       console.error('Error transferring ticket:', error);
       throw new Error('Failed to transfer ticket');
+    }
+  }
+
+  /**
+   * Estimate gas for a ticket transfer
+   */
+  public async estimateTransferGas(
+    fromAddress: string,
+    toAddress: string,
+    tokenId: string,
+    amount: number
+  ): Promise<ethers.BigNumber> {
+    try {
+      const contract = await this.getContract();
+      
+      const estimatedGas = await contract.estimateGas.safeTransferFrom(
+        fromAddress,
+        toAddress,
+        tokenId,
+        amount,
+        '0x'
+      );
+      
+      return estimatedGas;
+    } catch (error) {
+      console.error('Error estimating transfer gas:', error);
+      throw new Error('Failed to estimate gas for transfer');
     }
   }
 
@@ -348,13 +380,16 @@ class NFTTicketsService extends EventEmitter {
     if (!eventDate) return 'upcoming';
     
     const now = Math.floor(Date.now() / 1000);
+    const today = new Date();
+    const startOfDay = Math.floor(new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime() / 1000);
+    const endOfDay = Math.floor(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).getTime() / 1000 - 1);
     
-    if (eventDate > now) {
-      return 'upcoming';
-    } else if (eventDate > now - 86400) { // Within 24 hours
+    if (eventDate < startOfDay) {
+      return 'past';
+    } else if (eventDate >= startOfDay && eventDate <= endOfDay) {
       return 'today';
     } else {
-      return 'past';
+      return 'upcoming';
     }
   }
 
@@ -362,13 +397,8 @@ class NFTTicketsService extends EventEmitter {
    * Format date from timestamp
    */
   public formatDate(timestamp?: number): string {
-    if (!timestamp) return 'TBD';
-    return new Date(timestamp * 1000).toLocaleDateString(undefined, {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
+    if (!timestamp) return 'N/A';
+    return new Date(timestamp * 1000).toLocaleDateString();
   }
 
   /**
@@ -376,11 +406,11 @@ class NFTTicketsService extends EventEmitter {
    */
   public formatTime(timestamp?: number): string {
     if (!timestamp) return '';
-    return new Date(timestamp * 1000).toLocaleTimeString(undefined, {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return new Date(timestamp * 1000).toLocaleTimeString();
   }
 }
 
-export default new NFTTicketsService();
+// Create a singleton instance
+const nftTicketsService = new NFTTicketsService();
+
+export default nftTicketsService;

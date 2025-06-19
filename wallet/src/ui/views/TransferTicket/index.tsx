@@ -1,21 +1,46 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
-import { Form, Input, Button, Select, message, Steps, Card, Modal, Spin } from 'antd';
-import { ArrowLeftOutlined, SendOutlined, UserOutlined, TicketOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { Form, Input, Button, Select, message, Steps, Card, Modal, Tooltip, Spin } from 'antd';
+import { ArrowLeftOutlined, SendOutlined, UserOutlined, TicketOutlined, InfoCircleOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import styled from 'styled-components';
 import { useTranslation } from 'react-i18next';
 import { ethers } from 'ethers';
 import { useWallet } from '@/ui/utils';
-import { SWAGTIX_COLORS, getTicketStyle } from '@/ui/utils/theme';
-import eventTicketABI from '@/constant/abi/EventTicket1155.json';
+import { SWAGTIX_COLORS } from '@/ui/utils/theme';
+import nftTicketsService from '@/background/service/nftTickets';
 import { CHAINS } from '@/constant/networks.pulsechain';
-
-// Contract address for the EventTicket1155 contract
-const EVENT_TICKET_CONTRACT = process.env.EVENT_TICKET_CONTRACT || '0x0000000000000000000000000000000000000000';
+import { EVENT_TICKET_CONTRACT } from '@/utils/env';
+import eventTicketABI from '@/constant/abi/EventTicket1155.json';
 
 const { Step } = Steps;
 const { Option } = Select;
 
+// Interfaces for ticket data
+interface TicketMetadata {
+  name: string;
+  description: string;
+  image: string;
+  eventName?: string;
+  eventDate?: number;
+  venue?: string;
+  ticketType?: string;
+  seatInfo?: string;
+  organizer?: string;
+  terms?: string;
+}
+
+interface Ticket {
+  tokenId: string;
+  balance: number;
+  metadata: TicketMetadata;
+  contractInfo?: {
+    eventTimestamp: number;
+    qrCodeUri: string;
+    mediaUri: string;
+  };
+}
+
+// Styled components
 const Container = styled.div`
   padding: 24px;
   max-width: 600px;
@@ -46,7 +71,7 @@ const FormContainer = styled.div`
   margin-top: 24px;
 `;
 
-const TicketCard = styled(Card)`
+const TicketCardStyled = styled(Card)`
   margin-bottom: 16px;
   border-radius: 12px;
   
@@ -108,206 +133,209 @@ const LoadingContainer = styled.div`
   padding: 48px 0;
 `;
 
-interface Ticket {
-  tokenId: string;
-  balance: number;
-  metadata: {
-    name: string;
-    description: string;
-    image: string;
-    eventName?: string;
-    eventDate?: number;
-    venue?: string;
-  };
-}
+const GasEstimateBox = styled.div`
+  background-color: #f9f9f9;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 16px;
+  font-size: 14px;
+`;
 
 const TransferTicket: React.FC = () => {
   const { t } = useTranslation();
   const history = useHistory();
   const location = useLocation();
   const wallet = useWallet();
-  const [form] = Form.useForm();
   
   const [currentStep, setCurrentStep] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [transferring, setTransferring] = useState(false);
-  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [userTickets, setUserTickets] = useState<Ticket[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [transferSuccess, setTransferSuccess] = useState(false);
-  
-  // Parse tokenId from query params if available
+  const [managementWallet, setManagementWallet] = useState<string>('');
+  const [recipientAddress, setRecipientAddress] = useState<string>('');
+  const [transferAmount, setTransferAmount] = useState<number>(1);
+  const [walletBalance, setWalletBalance] = useState<string>('0.0');
+  const [estimatedGas, setEstimatedGas] = useState<string>('0.0');
+  const [transactionHash, setTransactionHash] = useState<string>('');
+  const [error, setError] = useState<string>('');
+
+  // Fetch user's wallet address and balance
   useEffect(() => {
-    const query = new URLSearchParams(location.search);
-    const tokenId = query.get('tokenId');
-    
-    if (tokenId) {
-      form.setFieldsValue({ tokenId });
-      fetchTicketDetails(tokenId);
-    } else {
-      fetchUserTickets();
-    }
-  }, [location, form]);
-  
-  // Fetch all user tickets
-  const fetchUserTickets = async () => {
-    setLoading(true);
-    try {
-      const currentAccount = await wallet.getCurrentAccount();
-      if (!currentAccount?.address) {
-        message.error(t('No account found'));
-        return;
+    const fetchWalletInfo = async () => {
+      try {
+        const account = await wallet.getCurrentAccount();
+        if (account?.address) {
+          setManagementWallet(account.address);
+          const balance = await wallet.getBalance(account.address);
+          setWalletBalance(ethers.utils.formatEther(balance));
+        }
+      } catch (error) {
+        console.error('Error fetching wallet info:', error);
+        message.error(t('Failed to load wallet information.'));
       }
-      
-      const provider = await wallet.getProvider(CHAINS.PULSE);
-      const contract = new ethers.Contract(EVENT_TICKET_CONTRACT, eventTicketABI, provider);
-      
-      const ticketsArray: Ticket[] = [];
-      
-      // Check first 20 token IDs (simplified for placeholder)
-      for (let tokenId = 1; tokenId <= 20; tokenId++) {
-        try {
-          const balance = await contract.balanceOf(currentAccount.address, tokenId);
-          
-          if (balance.gt(0)) {
-            const uri = await contract.uri(tokenId);
-            let metadata = {
-              name: `Ticket #${tokenId}`,
-              description: '',
-              image: 'https://via.placeholder.com/300x180?text=Ticket+Image'
-            };
-            
-            // Parse metadata from URI (simplified)
-            if (uri.startsWith('data:application/json')) {
-              const json = decodeURIComponent(uri.split(',')[1]);
-              metadata = JSON.parse(json);
-            }
-            
-            ticketsArray.push({
-              tokenId: tokenId.toString(),
-              balance: balance.toNumber(),
-              metadata
-            });
+    };
+    fetchWalletInfo();
+  }, [wallet, t]);
+
+  // Fetch user's tickets
+  useEffect(() => {
+    const fetchUserTickets = async () => {
+      setLoading(true);
+      try {
+        const account = await wallet.getCurrentAccount();
+        if (!account?.address) {
+          message.error(t('No account found to fetch tickets.'));
+          setLoading(false);
+          return;
+        }
+        
+        const tickets = await nftTicketsService.getTicketsByOwner(account.address);
+        setUserTickets(tickets);
+
+        // If a tokenId is passed in the URL, pre-select it
+        const query = new URLSearchParams(location.search);
+        const tokenIdFromUrl = query.get('tokenId');
+        if (tokenIdFromUrl) {
+          const preSelected = tickets.find(t => t.tokenId === tokenIdFromUrl);
+          if (preSelected) {
+            setSelectedTicket(preSelected);
+            setTransferAmount(1); // Default to 1 ticket
+          } else {
+            message.warn(t('Pre-selected ticket not found or not owned.'));
           }
-        } catch (err) {
-          console.error(`Error fetching token ${tokenId}:`, err);
+        }
+      } catch (error) {
+        console.error('Error fetching user tickets:', error);
+        message.error(t('Failed to load your tickets.'));
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUserTickets();
+  }, [wallet, location.search, t]);
+
+  // Estimate gas when ticket or amount changes
+  useEffect(() => {
+    const estimateGas = async () => {
+      if (selectedTicket && recipientAddress) {
+        try {
+          const gasEstimate = await nftTicketsService.estimateTransferGas(
+            managementWallet,
+            recipientAddress,
+            selectedTicket.tokenId,
+            transferAmount
+          );
+          setEstimatedGas(ethers.utils.formatEther(gasEstimate));
+        } catch (error) {
+          console.error('Error estimating gas:', error);
+          setEstimatedGas('0.0');
         }
       }
-      
-      setTickets(ticketsArray);
-    } catch (error) {
-      console.error('Error fetching tickets:', error);
-      message.error(t('Failed to load your tickets'));
-    } finally {
-      setLoading(false);
+    };
+    
+    if (selectedTicket && recipientAddress) {
+      estimateGas();
     }
-  };
-  
-  // Fetch details for a specific ticket
-  const fetchTicketDetails = async (tokenId: string) => {
-    setLoading(true);
-    try {
-      const currentAccount = await wallet.getCurrentAccount();
-      if (!currentAccount?.address) {
-        message.error(t('No account found'));
-        return;
-      }
-      
-      const provider = await wallet.getProvider(CHAINS.PULSE);
-      const contract = new ethers.Contract(EVENT_TICKET_CONTRACT, eventTicketABI, provider);
-      
-      const balance = await contract.balanceOf(currentAccount.address, tokenId);
-      
-      if (balance.gt(0)) {
-        const uri = await contract.uri(tokenId);
-        let metadata = {
-          name: `Ticket #${tokenId}`,
-          description: '',
-          image: 'https://via.placeholder.com/300x180?text=Ticket+Image'
-        };
-        
-        // Parse metadata from URI (simplified)
-        if (uri.startsWith('data:application/json')) {
-          const json = decodeURIComponent(uri.split(',')[1]);
-          metadata = JSON.parse(json);
-        }
-        
-        const ticket = {
-          tokenId,
-          balance: balance.toNumber(),
-          metadata
-        };
-        
-        setSelectedTicket(ticket);
-        setTickets([ticket]);
-      } else {
-        message.error(t('You don\'t own this ticket'));
-        history.push('/');
-      }
-    } catch (error) {
-      console.error('Error fetching ticket details:', error);
-      message.error(t('Failed to load ticket details'));
-      history.push('/');
-    } finally {
-      setLoading(false);
-    }
-  };
-  
+  }, [selectedTicket, recipientAddress, transferAmount, managementWallet]);
+
   // Format date from timestamp
-  const formatDate = (timestamp: number) => {
+  const formatDate = (timestamp?: number) => {
     if (!timestamp) return 'N/A';
-    return new Date(timestamp * 1000).toLocaleString();
+    return new Date(timestamp * 1000).toLocaleDateString();
   };
   
+  // Format time from timestamp
+  const formatTime = (timestamp?: number) => {
+    if (!timestamp) return '';
+    return new Date(timestamp * 1000).toLocaleTimeString();
+  };
+
   // Handle ticket selection
   const handleTicketSelect = (tokenId: string) => {
-    const ticket = tickets.find(t => t.tokenId === tokenId);
+    const ticket = userTickets.find(t => t.tokenId === tokenId);
     setSelectedTicket(ticket || null);
+    if (ticket) {
+      // Set default transfer amount to 1 or max if less than 1
+      setTransferAmount(Math.min(1, ticket.balance));
+    }
   };
-  
-  // Handle form submission for recipient
-  const handleRecipientSubmit = (values: { recipient: string }) => {
-    if (!selectedTicket) {
-      message.error(t('Please select a ticket first'));
-      return;
+
+  // Handle amount change
+  const handleAmountChange = (value: number) => {
+    if (selectedTicket && value > 0 && value <= selectedTicket.balance) {
+      setTransferAmount(value);
+    }
+  };
+
+  // Handle recipient address change
+  const handleRecipientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setRecipientAddress(e.target.value);
+  };
+
+  // Validate Ethereum address
+  const isValidEthereumAddress = (address: string) => {
+    return /^0x[a-fA-F0-9]{40}$/.test(address);
+  };
+
+  // Handle next step
+  const handleNextStep = () => {
+    // Validate current step
+    if (currentStep === 0) {
+      if (!selectedTicket) {
+        message.error(t('Please select a ticket to transfer.'));
+        return;
+      }
+      
+      if (!isValidEthereumAddress(recipientAddress)) {
+        message.error(t('Please enter a valid recipient address.'));
+        return;
+      }
+      
+      if (!transferAmount || transferAmount <= 0 || (selectedTicket && transferAmount > selectedTicket.balance)) {
+        message.error(t('Please enter a valid transfer amount.'));
+        return;
+      }
     }
     
-    // Move to confirmation step
-    setCurrentStep(1);
+    setCurrentStep(currentStep + 1);
   };
-  
+
   // Handle transfer confirmation
   const handleConfirmTransfer = async () => {
     if (!selectedTicket) {
-      message.error(t('No ticket selected'));
+      message.error(t('No ticket selected for transfer.'));
       return;
     }
     
-    const values = form.getFieldsValue();
-    const { recipient, quantity = 1 } = values;
-    
     setTransferring(true);
+    setError('');
     
     try {
-      // This is a placeholder - in a real implementation, we would:
-      // 1. Validate the recipient address
-      // 2. Connect to the contract
-      // 3. Call safeTransferFrom to transfer the ticket
+      const txHash = await nftTicketsService.transferTicket(
+        managementWallet,
+        recipientAddress,
+        selectedTicket.tokenId,
+        transferAmount
+      );
       
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Show success message
+      setTransactionHash(txHash);
       setTransferSuccess(true);
       
-      // In a real implementation, we would refresh the user's tickets here
-    } catch (error) {
-      console.error('Error transferring ticket:', error);
-      message.error(t('Failed to transfer ticket'));
+      // Refresh ticket list after successful transfer
+      const updatedTickets = await nftTicketsService.getTicketsByOwner(managementWallet);
+      setUserTickets(updatedTickets);
+      
+    } catch (error: any) {
+      console.error('Error during transfer:', error);
+      setError(error.message || t('Transfer failed. Please try again.'));
     } finally {
       setTransferring(false);
     }
   };
-  
+
   // Handle back button
   const handleBack = () => {
     if (currentStep > 0) {
@@ -316,240 +344,259 @@ const TransferTicket: React.FC = () => {
       history.goBack();
     }
   };
-  
+
   // Handle success modal close
-  const handleSuccessClose = () => {
-    history.push('/');
+  const handleSuccessModalClose = () => {
+    setTransferSuccess(false);
+    history.push('/nft-tickets'); // Go back to My Tickets
   };
-  
-  // Render loading state
+
+  // Show loading state
   if (loading) {
     return (
-      <Container>
-        <Header>
-          <BackButton icon={<ArrowLeftOutlined />} onClick={handleBack} />
-          <Title>{t('Transfer Ticket')}</Title>
-        </Header>
-        <LoadingContainer>
-          <Spin size="large" />
-          <p style={{ marginTop: 16 }}>{t('Loading ticket information...')}</p>
-        </LoadingContainer>
-      </Container>
+      <LoadingContainer>
+        <Spin size="large" />
+        <p style={{ marginTop: 16 }}>{t('Loading tickets and wallet info...')}</p>
+      </LoadingContainer>
     );
   }
-  
-  // Render success modal
-  const renderSuccessModal = () => (
-    <Modal
-      visible={transferSuccess}
-      title={t('Transfer Complete!')}
-      onCancel={handleSuccessClose}
-      footer={[
-        <Button key="back" type="primary" onClick={handleSuccessClose}>
-          {t('Back to My Tickets')}
-        </Button>,
-      ]}
-      centered
-    >
-      <div style={{ textAlign: 'center', padding: '24px 0' }}>
-        <div style={{ fontSize: 64, color: SWAGTIX_COLORS.PURPLE, marginBottom: 16 }}>
-          ✓
-        </div>
-        <h3>{t('Your ticket has been sent')}</h3>
-        <p>{t('The recipient can now access this ticket in their account.')}</p>
-      </div>
-    </Modal>
-  );
-  
-  // Render step content
-  const renderStepContent = () => {
-    switch (currentStep) {
-      case 0: // Select ticket and recipient
-        return (
-          <FormContainer>
-            <Form
-              form={form}
-              layout="vertical"
-              onFinish={handleRecipientSubmit}
-            >
-              {tickets.length > 1 && (
-                <Form.Item
-                  name="tokenId"
-                  label={t('Select Ticket')}
-                  rules={[{ required: true, message: t('Please select a ticket') }]}
-                >
-                  <Select 
-                    placeholder={t('Choose a ticket')}
-                    onChange={handleTicketSelect}
-                    size="large"
-                  >
-                    {tickets.map(ticket => (
-                      <Option key={ticket.tokenId} value={ticket.tokenId}>
-                        {ticket.metadata.eventName || ticket.metadata.name}
-                      </Option>
-                    ))}
-                  </Select>
-                </Form.Item>
-              )}
-              
-              {selectedTicket && (
-                <TicketCard>
-                  <TicketImage 
-                    src={selectedTicket.metadata.image} 
-                    alt={selectedTicket.metadata.name}
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = 'https://via.placeholder.com/300x180?text=Ticket+Image';
-                    }}
-                  />
-                  <TicketInfo>
-                    <TicketName>
-                      {selectedTicket.metadata.eventName || selectedTicket.metadata.name}
-                    </TicketName>
-                    {selectedTicket.metadata.eventDate && (
-                      <TicketDetail>
-                        <strong>{t('Date')}:</strong> {formatDate(selectedTicket.metadata.eventDate)}
-                      </TicketDetail>
-                    )}
-                    {selectedTicket.metadata.venue && (
-                      <TicketDetail>
-                        <strong>{t('Venue')}:</strong> {selectedTicket.metadata.venue}
-                      </TicketDetail>
-                    )}
-                    <TicketDetail>
-                      <strong>{t('Quantity')}:</strong> {selectedTicket.balance}
-                    </TicketDetail>
-                  </TicketInfo>
-                </TicketCard>
-              )}
-              
-              {selectedTicket && selectedTicket.balance > 1 && (
-                <Form.Item
-                  name="quantity"
-                  label={t('Quantity to Transfer')}
-                  initialValue={1}
-                  rules={[
-                    { required: true, message: t('Please enter quantity') },
-                    { 
-                      type: 'number', 
-                      min: 1, 
-                      max: selectedTicket.balance, 
-                      message: t('Invalid quantity') 
-                    }
-                  ]}
-                >
-                  <Select size="large">
-                    {Array.from({ length: selectedTicket.balance }, (_, i) => i + 1).map(num => (
-                      <Option key={num} value={num}>{num}</Option>
-                    ))}
-                  </Select>
-                </Form.Item>
-              )}
-              
-              <Form.Item
-                name="recipient"
-                label={t('Recipient')}
-                rules={[
-                  { required: true, message: t('Please enter recipient address or email') },
-                ]}
-                tooltip={t('Enter the recipient\'s account ID or email address')}
-              >
-                <Input 
-                  prefix={<UserOutlined />} 
-                  placeholder={t('Address or Email')}
-                  size="large"
-                />
-              </Form.Item>
-              
-              <InfoBox>
-                <InfoCircleOutlined style={{ marginRight: 8 }} />
-                {t('Make sure you\'re sending this ticket to the right person. Transfers cannot be undone.')}
-              </InfoBox>
-              
-              <SubmitButton 
-                type="primary" 
-                htmlType="submit"
-                icon={<SendOutlined />}
-              >
-                {t('Continue')}
-              </SubmitButton>
-            </Form>
-          </FormContainer>
-        );
-        
-      case 1: // Confirmation
-        return (
-          <FormContainer>
-            <h3>{t('Confirm Transfer')}</h3>
-            
-            {selectedTicket && (
-              <TicketCard>
-                <TicketInfo>
-                  <TicketName>
-                    {selectedTicket.metadata.eventName || selectedTicket.metadata.name}
-                  </TicketName>
-                  {selectedTicket.metadata.eventDate && (
-                    <TicketDetail>
-                      <strong>{t('Date')}:</strong> {formatDate(selectedTicket.metadata.eventDate)}
-                    </TicketDetail>
-                  )}
-                  <TicketDetail>
-                    <strong>{t('Quantity')}:</strong> {form.getFieldValue('quantity') || 1}
-                  </TicketDetail>
-                  <TicketDetail>
-                    <strong>{t('Recipient')}:</strong> {form.getFieldValue('recipient')}
-                  </TicketDetail>
-                </TicketInfo>
-              </TicketCard>
-            )}
-            
-            <InfoBox>
-              <InfoCircleOutlined style={{ marginRight: 8 }} />
-              {t('This action cannot be undone. The recipient will receive this ticket in their account.')}
-            </InfoBox>
-            
-            <div style={{ display: 'flex', gap: 16 }}>
-              <Button 
-                onClick={handleBack} 
-                style={{ flex: 1 }}
-                size="large"
-                disabled={transferring}
-              >
-                {t('Back')}
-              </Button>
-              <SubmitButton 
-                type="primary"
-                onClick={handleConfirmTransfer}
-                loading={transferring}
-                disabled={transferring}
-                style={{ flex: 2 }}
-              >
-                {transferring ? t('Transferring...') : t('Confirm Transfer')}
-              </SubmitButton>
-            </div>
-          </FormContainer>
-        );
-        
-      default:
-        return null;
+
+  // Render steps
+  const steps = [
+    {
+      title: t('Select Ticket'),
+      icon: <TicketOutlined />
+    },
+    {
+      title: t('Confirm Transfer'),
+      icon: <SendOutlined />
     }
-  };
-  
+  ];
+
   return (
     <Container>
       <Header>
-        <BackButton icon={<ArrowLeftOutlined />} onClick={handleBack} />
+        <BackButton 
+          type="text" 
+          icon={<ArrowLeftOutlined />} 
+          onClick={handleBack}
+        />
         <Title>{t('Transfer Ticket')}</Title>
       </Header>
       
       <StepsContainer>
-        <Steps current={currentStep} size="small">
-          <Step title={t('Details')} icon={<TicketOutlined />} />
-          <Step title={t('Confirm')} icon={<SendOutlined />} />
+        <Steps current={currentStep}>
+          {steps.map(step => (
+            <Step key={step.title} title={step.title} icon={step.icon} />
+          ))}
         </Steps>
       </StepsContainer>
       
-      {renderStepContent()}
-      {renderSuccessModal()}
+      {currentStep === 0 && (
+        <FormContainer>
+          <Form layout="vertical">
+            <Form.Item 
+              label={t('Select Ticket')}
+              required
+              validateStatus={!selectedTicket ? 'error' : ''}
+              help={!selectedTicket ? t('Please select a ticket') : ''}
+            >
+              <Select
+                placeholder={t('Choose a ticket to transfer')}
+                onChange={handleTicketSelect}
+                value={selectedTicket?.tokenId}
+                style={{ width: '100%' }}
+                size="large"
+                showSearch
+                optionFilterProp="children"
+              >
+                {userTickets.map(ticket => (
+                  <Option key={ticket.tokenId} value={ticket.tokenId}>
+                    {ticket.metadata.eventName || ticket.metadata.name} (ID: {ticket.tokenId}, Qty: {ticket.balance})
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+            
+            {selectedTicket && (
+              <TicketCardStyled>
+                <TicketImage
+                  src={selectedTicket.metadata.image}
+                  alt={selectedTicket.metadata.name}
+                  onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+                    e.currentTarget.src = '/images/ticket-placeholder.png';
+                  }}
+                />
+                <TicketInfo>
+                  <TicketName>{selectedTicket.metadata.eventName || selectedTicket.metadata.name}</TicketName>
+                  {selectedTicket.contractInfo?.eventTimestamp && (
+                    <TicketDetail>
+                      <strong>{t('Event Date')}:</strong> {formatDate(selectedTicket.contractInfo.eventTimestamp)} {formatTime(selectedTicket.contractInfo.eventTimestamp)}
+                    </TicketDetail>
+                  )}
+                  {selectedTicket.metadata.venue && (
+                    <TicketDetail>
+                      <strong>{t('Venue')}:</strong> {selectedTicket.metadata.venue}
+                    </TicketDetail>
+                  )}
+                  <TicketDetail>
+                    <strong>{t('Ticket ID')}:</strong> {selectedTicket.tokenId}
+                  </TicketDetail>
+                  <TicketDetail>
+                    <strong>{t('Available Quantity')}:</strong> {selectedTicket.balance}
+                  </TicketDetail>
+                </TicketInfo>
+              </TicketCardStyled>
+            )}
+            
+            <Form.Item 
+              label={t('Recipient Address')}
+              required
+              validateStatus={recipientAddress && !isValidEthereumAddress(recipientAddress) ? 'error' : ''}
+              help={recipientAddress && !isValidEthereumAddress(recipientAddress) ? t('Invalid Ethereum address') : ''}
+            >
+              <Input
+                placeholder="0x..."
+                value={recipientAddress}
+                onChange={handleRecipientChange}
+                size="large"
+                prefix={<UserOutlined />}
+              />
+            </Form.Item>
+            
+            <Form.Item 
+              label={t('Transfer Amount')}
+              required
+              validateStatus={
+                !transferAmount || 
+                transferAmount <= 0 || 
+                (selectedTicket && transferAmount > selectedTicket.balance) ? 'error' : ''
+              }
+              help={
+                !transferAmount ? t('Please enter an amount') :
+                transferAmount <= 0 ? t('Amount must be positive') :
+                (selectedTicket && transferAmount > selectedTicket.balance) ? t('Amount exceeds available balance') : ''
+              }
+            >
+              <Input
+                type="number"
+                min={1}
+                max={selectedTicket?.balance || 1}
+                value={transferAmount}
+                onChange={e => handleAmountChange(parseInt(e.target.value) || 0)}
+                size="large"
+                suffix={
+                  <Tooltip title={t('Maximum available: {balance}', { balance: selectedTicket?.balance || 0 })}>
+                    <InfoCircleOutlined style={{ color: 'rgba(0,0,0,.45)' }} />
+                  </Tooltip>
+                }
+              />
+            </Form.Item>
+            
+            {selectedTicket && recipientAddress && isValidEthereumAddress(recipientAddress) && (
+              <GasEstimateBox>
+                <p><strong>{t('Estimated Gas')}:</strong> {estimatedGas} PLS</p>
+                <p><strong>{t('Wallet Balance')}:</strong> {walletBalance} PLS</p>
+              </GasEstimateBox>
+            )}
+            
+            <SubmitButton
+              type="primary"
+              onClick={handleNextStep}
+              disabled={
+                !selectedTicket || 
+                !recipientAddress || 
+                !isValidEthereumAddress(recipientAddress) ||
+                !transferAmount || 
+                transferAmount <= 0 || 
+                (selectedTicket && transferAmount > selectedTicket.balance)
+              }
+            >
+              {t('Next')}
+            </SubmitButton>
+          </Form>
+        </FormContainer>
+      )}
+      
+      {currentStep === 1 && (
+        <FormContainer>
+          <InfoBox>
+            <p>{t('You are about to transfer tickets from your wallet. Please review the details below carefully.')}</p>
+          </InfoBox>
+          
+          <TicketCardStyled>
+            <TicketInfo>
+              <TicketName>{selectedTicket?.metadata.eventName || selectedTicket?.metadata.name}</TicketName>
+              <TicketDetail>
+                <strong>{t('From')}:</strong> {managementWallet}
+              </TicketDetail>
+              <TicketDetail>
+                <strong>{t('To')}:</strong> {recipientAddress}
+              </TicketDetail>
+              <TicketDetail>
+                <strong>{t('Ticket ID')}:</strong> {selectedTicket?.tokenId}
+              </TicketDetail>
+              <TicketDetail>
+                <strong>{t('Amount')}:</strong> {transferAmount}
+              </TicketDetail>
+              <TicketDetail>
+                <strong>{t('Estimated Gas')}:</strong> {estimatedGas} PLS
+              </TicketDetail>
+            </TicketInfo>
+          </TicketCardStyled>
+          
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <Button 
+              onClick={handleBack}
+              disabled={transferring}
+              style={{ flex: 1 }}
+            >
+              {t('Back')}
+            </Button>
+            <SubmitButton
+              type="primary"
+              onClick={handleConfirmTransfer}
+              loading={transferring}
+              style={{ flex: 1 }}
+            >
+              {transferring ? t('Transferring...') : t('Confirm Transfer')}
+            </SubmitButton>
+          </div>
+          
+          {error && (
+            <div style={{ marginTop: '16px', color: '#ff4d4f', textAlign: 'center' }}>
+              <ExclamationCircleOutlined style={{ marginRight: '8px' }} />
+              {error}
+            </div>
+          )}
+        </FormContainer>
+      )}
+      
+      <Modal
+        title={t('Transfer Successful')}
+        visible={transferSuccess}
+        onCancel={handleSuccessModalClose}
+        footer={[
+          <Button key="back" onClick={handleSuccessModalClose}>
+            {t('Back to My Tickets')}
+          </Button>
+        ]}
+      >
+        <div style={{ textAlign: 'center', padding: '24px 0' }}>
+          <CheckCircleOutlined style={{ fontSize: 64, color: '#52c41a', marginBottom: 24 }} />
+          <h3>{t('Your tickets have been transferred successfully!')}</h3>
+          <p>{t('Transaction Hash')}: {transactionHash.substring(0, 10)}...{transactionHash.substring(transactionHash.length - 8)}</p>
+          <p>
+            <a 
+              href={`${CHAINS.pulsechain.blockExplorerURL}/tx/${transactionHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {t('View on Explorer')}
+            </a>
+          </p>
+        </div>
+      </Modal>
     </Container>
   );
 };
