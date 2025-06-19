@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
 import { Form, Input, Button, Select, message, Steps, Card, Modal, Tooltip, Spin } from 'antd';
-import { ArrowLeftOutlined, SendOutlined, UserOutlined, TicketOutlined, InfoCircleOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SendOutlined, UserOutlined, FileTextOutlined, InfoCircleOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import styled from 'styled-components';
 import { useTranslation } from 'react-i18next';
 import { ethers } from 'ethers';
@@ -9,7 +9,6 @@ import { useWallet } from '@/ui/utils';
 import { SWAGTIX_COLORS } from '@/ui/utils/theme';
 import nftTicketsService from '@/background/service/nftTickets';
 import { CHAINS } from '@/constant/networks.pulsechain';
-import { EVENT_TICKET_CONTRACT } from '@/utils/env';
 import eventTicketABI from '@/constant/abi/EventTicket1155.json';
 
 const { Step } = Steps;
@@ -365,7 +364,7 @@ const TransferTicket: React.FC = () => {
   const steps = [
     {
       title: t('Select Ticket'),
-      icon: <TicketOutlined />
+      icon: <FileTextOutlined />
     },
     {
       title: t('Confirm Transfer'),

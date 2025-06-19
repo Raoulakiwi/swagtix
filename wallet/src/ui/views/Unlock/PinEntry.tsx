@@ -182,7 +182,12 @@ const PinEntry: React.FC = () => {
     getUserInfo();
   }, []);
 
-  const handleSubmit = async (values: { pin: string }) => {
+  /**
+   * Actual async PIN verification logic.
+   * Split out so we can call it from a non-async wrapper that satisfies
+   * antd Form’s `onFinish` type signature (expects `void` return).
+   */
+  const handleSubmitAsync = async (values: { pin: string }) => {
     const { pin } = values;
     
     setLoading(true);
@@ -221,6 +226,16 @@ const PinEntry: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  /**
+   * Wrapper passed to `<Form onFinish={...}>`.
+   * Must return `void` to match antd typings, so we invoke the async
+   * implementation without awaiting its promise.
+   */
+  const handleSubmit = (values: { pin: string }): void => {
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    handleSubmitAsync(values);
   };
 
   const handleEmailLogin = async () => {

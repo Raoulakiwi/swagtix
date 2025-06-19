@@ -11,7 +11,6 @@ import {
   SAFE_GAS_LIMIT_RATIO,
 } from 'consts';
 import {
-  ExplainTxResponse,
   GasLevel,
   Tx,
   TxPushType,
@@ -22,6 +21,13 @@ import { Chain } from '@debank/common';
 import i18n from '@/i18n';
 import { Account } from 'background/service/preference';
 import { AuthorizationList, AuthorizationListBytes } from '@ethereumjs/common';
+
+// ---------------------------------------------------------------------------
+// Placeholder interface for ExplainTxResponse (originally from OpenAPI layer)
+// ---------------------------------------------------------------------------
+interface ExplainTxResponse {
+  [key: string]: any;
+}
 
 export interface ApprovalRes extends Tx {
   type?: string;

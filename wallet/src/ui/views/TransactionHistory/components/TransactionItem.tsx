@@ -30,6 +30,23 @@ import ThemeIcon from '@/ui/component/ThemeMode/ThemeIcon';
 import { findChain } from '@/utils/chain';
 import { getTxScanLink } from '@/utils';
 
+// ---------------------------------------------------------------------------
+// Placeholder types for compatibility after removing OpenAPI imports
+// ---------------------------------------------------------------------------
+// Some parts of the original Rabby codebase reference `TxDisplayItem`
+// and `TxHistoryItem` that were provided by `background/service/openapi`.
+// The OpenAPI layer has been removed as part of the cut-down SwagTix wallet,
+// so we declare minimal placeholder interfaces here to keep TypeScript happy.
+// They should be replaced with proper definitions or removed entirely once
+// the corresponding logic is refactored.
+export interface TxDisplayItem {
+  [key: string]: any;
+}
+
+export interface TxHistoryItem {
+  [key: string]: any;
+}
+
 const ChildrenWrapper = styled.div`
   padding: 2px;
   padding-top: 0;

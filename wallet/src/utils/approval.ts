@@ -3,9 +3,23 @@ import BigNumber from 'bignumber.js';
 import {
   NFTApproval,
   NFTApprovalContract,
-  Spender,
-  TokenApproval,
 } from '@/background/service/openapi';
+
+// ---------------------------------------------------------------------------
+// Placeholder interfaces
+// ---------------------------------------------------------------------------
+// The original `Spender` and `TokenApproval` interfaces were provided by the
+// `@/background/service/openapi` module that has been removed from the trimmed
+// SwagTix wallet.  Minimal placeholder versions are defined here to keep the
+// TypeScript compiler satisfied.  Replace with concrete definitions or
+// remove related logic as the codebase is further simplified.
+export interface Spender {
+  [key: string]: any;
+}
+
+export interface TokenApproval {
+  [key: string]: any;
+}
 import {
   coerceFloat,
   coerceInteger,

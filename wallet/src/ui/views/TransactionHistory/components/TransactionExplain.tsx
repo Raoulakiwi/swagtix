@@ -19,6 +19,23 @@ import IconUnknown from 'ui/assets/icon-unknown.svg';
 import { splitNumberByStep } from 'ui/utils/number';
 import { getActionTypeText } from '../../Approval/components/Actions/utils';
 
+// ---------------------------------------------------------------------------
+// Placeholder types for compatibility after removing OpenAPI imports
+// ---------------------------------------------------------------------------
+// NOTE:
+// TxDisplayItem and TxHistoryItem used to be imported from
+// `background/service/openapi`.  Since that module was removed in the
+// pared-down wallet, we declare minimal placeholder interfaces here so that
+// any residual references compile.  Refactor or remove those references as
+// the codebase is further simplified.
+export interface TxDisplayItem {
+  [key: string]: any;
+}
+
+export interface TxHistoryItem {
+  [key: string]: any;
+}
+
 export const TransactionExplain = ({
   isFailed,
   isSubmitFailed,
