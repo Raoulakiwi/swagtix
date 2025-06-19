@@ -146,17 +146,51 @@ if [ -d "node_modules" ]; then
 fi
 
 # ------------------------------------------------------------------
-# 3.5 Quick network test – ensure we can reach the Yarn registry
+# 3.5 Enhanced network test – ensure we can reach the Yarn registry
 # ------------------------------------------------------------------
 YARN_REGISTRY_URL="https://registry.yarnpkg.com"
-log_info "Checking connectivity to Yarn registry ($YARN_REGISTRY_URL)…"
-if ! curl -I --connect-timeout 5 --silent "$YARN_REGISTRY_URL" | grep -q "200 OK"; then
-  log_warn "Unable to reach $YARN_REGISTRY_URL."
-  log_warn "This may be a temporary outage or a network / proxy issue."
-  log_warn "Please verify internet connectivity, firewall or proxy settings and retry."
+CURL_VERBOSE_OUTPUT_FILE="/tmp/yarn_registry_curl_verbose.log"
+log_info "Checking connectivity to Yarn registry ($YARN_REGISTRY_URL)..."
+
+# Check for proxy environment variables
+PROXY_ENV_VARS_SET=0
+if [ -n "$HTTP_PROXY" ] || [ -n "$HTTPS_PROXY" ] || [ -n "$http_proxy" ] || [ -n "$https_proxy" ]; then
+  PROXY_ENV_VARS_SET=1
+  log_warn "Proxy environment variables (HTTP_PROXY/HTTPS_PROXY) are set."
+  log_warn "If connectivity fails, ensure your proxy settings are correct and allow access to $YARN_REGISTRY_URL."
+  log_warn "You might need to configure Yarn or npm to use this proxy."
+fi
+
+# Primary connectivity check (follow redirects, silent, get HTTP status code)
+HTTP_STATUS_CODE=$(curl -L --connect-timeout 10 --silent --output /dev/null --write-out "%{http_code}" "$YARN_REGISTRY_URL")
+
+if [ "$HTTP_STATUS_CODE" -eq 200 ]; then
+  log_success "Yarn registry reachable (HTTP $HTTP_STATUS_CODE)."
+else
+  log_warn "Initial connectivity check to $YARN_REGISTRY_URL failed (HTTP $HTTP_STATUS_CODE)."
+  
+  log_info "Running verbose connectivity test. Output will be in $CURL_VERBOSE_OUTPUT_FILE"
+  if curl -L -v --connect-timeout 15 "$YARN_REGISTRY_URL" --output /dev/null 2>"$CURL_VERBOSE_OUTPUT_FILE"; then
+    log_warn "Verbose test command succeeded, but the initial status code was not 200. This is unusual."
+    log_warn "Please check $CURL_VERBOSE_OUTPUT_FILE for details."
+  else
+    log_error "Verbose connectivity test also failed. Please check $CURL_VERBOSE_OUTPUT_FILE for detailed curl logs."
+  fi
+
+  log_info "Attempting insecure connectivity test (ignoring SSL certificate issues)..."
+  HTTP_STATUS_CODE_INSECURE=$(curl -L -k --connect-timeout 10 --silent --output /dev/null --write-out "%{http_code}" "$YARN_REGISTRY_URL")
+  if [ "$HTTP_STATUS_CODE_INSECURE" -eq 200 ]; then
+    log_warn "Connection to $YARN_REGISTRY_URL succeeded with -k (insecure SSL)."
+    log_warn "This might indicate an SSL certificate issue on your server, network, or an intermediate proxy."
+    log_warn "This is NOT recommended for production and is only for diagnosis."
+  else
+    log_warn "Insecure connectivity test also failed (HTTP $HTTP_STATUS_CODE_INSECURE)."
+  fi
+
+  log_error "Unable to reliably reach $YARN_REGISTRY_URL."
+  log_info "Please verify internet connectivity, DNS resolution, firewall rules, and proxy settings."
   exit 1
 fi
-log_success "Yarn registry reachable."
 
 log_info "Cleaning Yarn cache for this project..."
 yarn cache clean
