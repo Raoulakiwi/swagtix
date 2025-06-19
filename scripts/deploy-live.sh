@@ -229,7 +229,8 @@ if [ -f "yarn.lock" ] && command -v yarn >/dev/null 2>&1; then
   run_npm_cmd "build for main wallet" yarn build:pro --silent
 else
   log_info "Using npm for wallet dependencies"
-  run_npm_cmd "npm install for main wallet" npm install --silent
+  # Use legacy peer-deps to avoid strict peer-dependency resolution errors
+  run_npm_cmd "npm install for main wallet" npm install --legacy-peer-deps --silent
   run_npm_cmd "build for main wallet" npm run build:pro --silent
 fi
 
