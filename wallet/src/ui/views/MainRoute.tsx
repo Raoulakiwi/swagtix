@@ -25,8 +25,6 @@ import Activities from './Activities';
 import { HistoryPage } from './History';
 import AdvancedSettings from './AdvanceSettings';
 import RequestPermission from './RequestPermission';
-import SendToken from './SendToken';
-import SendNFT from './SendNFT';
 import Receive from './Receive/index';
 import WalletConnectTemplate from './WalletConnect';
 import AddressDetail from './AddressDetail';
@@ -303,9 +301,6 @@ const Main = () => {
         <PrivateRoute exact path="/activities">
           <Activities />
         </PrivateRoute>
-        <PrivateRoute exact path="/gnosis-queue">
-          <GnosisQueue />
-        </PrivateRoute>
         <PrivateRoute exact path="/import/gnosis">
           <ImportGnosis />
         </PrivateRoute>
@@ -323,9 +318,6 @@ const Main = () => {
         </PrivateRoute>
         <PrivateRoute exact path="/token-approval">
           <TokenApproval />
-        </PrivateRoute>
-        <PrivateRoute exact path="/nft-approval">
-          <NFTApproval />
         </PrivateRoute>
         <PrivateRoute exact path="/settings/address">
           <ManageAddress />
@@ -401,14 +393,8 @@ const Main = () => {
         <PrivateRoute exact path="/nft">
           <NFTView />
         </PrivateRoute>
-        <PrivateRoute exact path="/rabby-points">
-          <RabbyPoints />
-        </PrivateRoute>
         <PrivateRoute path="/ecology/:chainId">
           <Ecology />
-        </PrivateRoute>
-        <PrivateRoute path="/gas-account">
-          <GasAccount />
         </PrivateRoute>
       </Switch>
 
