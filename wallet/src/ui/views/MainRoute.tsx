@@ -16,7 +16,7 @@ import ConnectLedger from './ImportHardware/LedgerConnect';
 import ConnectedSites from './ConnectedSites';
 import Approval from './Approval';
 import TokenApproval from './TokenApproval';
-import NFTApproval from './NFTApproval';
+// import NFTApproval from './NFTApproval'; // removed feature
 import AddAddress from './AddAddress';
 import ChainList from './ChainList';
 import AddressManagement from './AddressManagement';
@@ -40,11 +40,10 @@ import ManageAddress from './ManageAddress';
 import { NFTView } from './NFTView';
 import { QRCodeConnect } from './ImportHardware/QRCodeConnect';
 import { KeystoneConnect } from './ImportHardware/KeystoneConnect';
-import ApprovalManagePage from './ApprovalManagePage';
 import { ImportCoboArgus } from './ImportCoboArgus/ImportCoboArgus';
 import { ImportCoinbase } from './ImportCoinbase/ImportCoinbase';
 import { DappSearchPage } from './DappSearch';
-import RabbyPoints from './RabbyPoints';
+// import RabbyPoints from './RabbyPoints'; // removed feature
 import { ImKeyConnect } from './ImportHardware/ImKeyConnect';
 import InputMnemonics from './ImportMnemonics/InputMnemonics';
 import CreateMnemonics from './CreateMnemonics';
@@ -52,8 +51,7 @@ import ImportHardware from './ImportHardware';
 import { CustomTestnet } from './CustomTestnet';
 import { AddFromCurrentSeedPhrase } from './AddFromCurrentSeedPhrase';
 import { Ecology } from './Ecology';
-import { Bridge } from './Bridge';
-import { GasAccount } from './GasAccount';
+// import { GasAccount } from './GasAccount'; // removed feature
 import { GnosisQueue } from './GnosisQueue';
 import { Guide } from './NewUserImport/Guide';
 import { ImportWalletList } from './NewUserImport/ImportList';
@@ -346,23 +344,11 @@ const Main = () => {
         <PrivateRoute exact path="/request-permission">
           <RequestPermission />
         </PrivateRoute>
-        <PrivateRoute exact path="/send-token">
-          <SendToken />
-        </PrivateRoute>
-        <PrivateRoute exact path="/send-nft">
-          <SendNFT />
-        </PrivateRoute>
+        {/* send-token / send-nft features removed in trimmed wallet */}
         <PrivateRoute exact path="/receive">
           <Receive />
         </PrivateRoute>
 
-        <PrivateRoute exact path="/bridge">
-          <Bridge />
-        </PrivateRoute>
-
-        <PrivateRoute exact path="/approval-manage">
-          <ApprovalManagePage />
-        </PrivateRoute>
         <PrivateRoute exact path="/dapp-search">
           <DappSearchPage />
         </PrivateRoute>

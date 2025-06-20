@@ -162,15 +162,15 @@ const EmailSignup: React.FC = () => {
       await web3authService.init(); // Make sure this is idempotent or handled correctly
       const loginResult = await web3authService.loginWithEmail(email);
       
-      if (loginResult && loginResult.privKey) {
+      if (loginResult && loginResult.privateKey) {
         // Use the private key to set up the wallet
         // This might involve creating a new keyring or importing the private key
         // The exact method depends on how Rabby's core (or your simplified version) handles it
         
         // Example: (This needs to be adapted to your wallet's specific methods)
-        // const accounts = await wallet.createKeyringWithPrivateKey(loginResult.privKey);
-        // await wallet.unlockKeyring(accounts[0].type, accounts[0].brandName, loginResult.privKey); 
-        // await wallet.addKeyring(accounts[0].type, accounts[0].brandName, loginResult.privKey);
+        // const accounts = await wallet.createKeyringWithPrivateKey(loginResult.privateKey);
+        // await wallet.unlockKeyring(accounts[0].type, accounts[0].brandName, loginResult.privateKey); 
+        // await wallet.addKeyring(accounts[0].type, accounts[0].brandName, loginResult.privateKey);
 
         // For SwagTix, we might want to directly use the private key to create/unlock
         // a SimpleKeyring or a specific Web3Auth keyring type if Rabby supports it.

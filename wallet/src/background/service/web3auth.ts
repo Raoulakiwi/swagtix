@@ -1,295 +1,178 @@
-import { CHAIN_INFO } from '@/constant/networks.pulsechain';
-import { IWeb3Auth } from '@web3auth/base';
-import { EthereumPrivateKeyProvider } from '@web3auth/ethereum-provider';
 import { Web3Auth } from '@web3auth/modal';
 import { OpenloginAdapter } from '@web3auth/openlogin-adapter';
-import { ADAPTER_EVENTS, CHAIN_NAMESPACES, WALLET_ADAPTERS } from '@web3auth/base';
-import { ethers } from 'ethers';
-import EventEmitter from 'events';
-import permissionService from './permission';
-import { createPersistStore } from '@/background/utils';
-import { keyringService } from './keyring';
-import { message } from '@/background/webapi';
-import env from '@/utils/env';
+import { CHAIN_NAMESPACES, SafeEventEmitterProvider } from '@web3auth/base';
+import { EthereumPrivateKeyProvider } from '@web3auth/ethereum-provider';
+import { CHAINS } from '@/constant/networks.pulsechain'; // Adjusted path
 
-interface Web3AuthStore {
-  isLoggedIn: boolean;
-  userInfo: {
-    email?: string;
-    name?: string;
-    profileImage?: string;
-    verifier?: string;
-    verifierId?: string;
-  } | null;
-  sessionId?: string;
-}
+// Environment variables (ensure these are set in your .env or build process)
+const WEB3AUTH_CLIENT_ID = process.env.REACT_APP_WEB3AUTH_CLIENT_ID || 'YOUR_WEB3AUTH_CLIENT_ID_STAGING'; // Fallback to a generic one for now
+const WEB3AUTH_NETWORK = process.env.REACT_APP_WEB3AUTH_NETWORK || 'sapphire_devnet'; // Or 'sapphire_mainnet'
 
-class Web3AuthService extends EventEmitter {
-  private web3auth: IWeb3Auth | null = null;
-  private provider: any = null;
-  private ethereumProvider: EthereumPrivateKeyProvider | null = null;
-  private store = createPersistStore<Web3AuthStore>({
-    name: 'web3auth',
-    template: {
-      isLoggedIn: false,
-      userInfo: null,
-      sessionId: undefined,
-    },
-  });
+class Web3AuthService {
+  private web3auth: Web3Auth | null = null;
+  private provider: SafeEventEmitterProvider | null = null;
 
   constructor() {
-    super();
-    this.init();
+    // console.log('Web3AuthService constructor called');
+    // console.log('WEB3AUTH_CLIENT_ID:', WEB3AUTH_CLIENT_ID);
+    // console.log('WEB3AUTH_NETWORK:', WEB3AUTH_NETWORK);
   }
 
-  private async init() {
-    try {
-      // Configure the Ethereum provider for PulseChain
-      this.ethereumProvider = new EthereumPrivateKeyProvider({
-        config: {
-          chainConfig: {
-            chainNamespace: CHAIN_NAMESPACES.EIP155,
-            chainId: CHAIN_INFO.PULSE.chainId,
-            rpcTarget: CHAIN_INFO.PULSE.rpcUrls[0],
-            displayName: CHAIN_INFO.PULSE.chainName,
-            blockExplorer: CHAIN_INFO.PULSE.blockExplorerUrls[0],
-            ticker: CHAIN_INFO.PULSE.nativeCurrency.symbol,
-            tickerName: CHAIN_INFO.PULSE.nativeCurrency.name,
-          },
-        },
-      });
-
-      // Initialize Web3Auth
-      this.web3auth = new Web3Auth({
-        clientId: env.web3Auth.clientId,
-        chainConfig: {
-          chainNamespace: CHAIN_NAMESPACES.EIP155,
-          chainId: CHAIN_INFO.PULSE.chainId,
-          rpcTarget: CHAIN_INFO.PULSE.rpcUrls[0],
-        },
-        web3AuthNetwork: env.web3Auth.network,
-        uiConfig: {
-          appName: 'SwagTix Wallet',
-          theme: 'dark',
-          loginMethodsOrder: ['email_passwordless'],
-          defaultLanguage: 'en',
-          appLogo: 'https://swagtix.com/logo.png', // Replace with your app logo
-        },
-      });
-
-      // Configure OpenLogin adapter
-      const openloginAdapter = new OpenloginAdapter({
-        loginSettings: {
-          mfaLevel: 'none',
-        },
-        adapterSettings: {
-          whiteLabel: {
-            name: 'SwagTix',
-            logoLight: 'https://swagtix.com/logo.png', // Replace with your app logo
-            logoDark: 'https://swagtix.com/logo-dark.png', // Replace with your app logo
-            defaultLanguage: 'en',
-            dark: true,
-          },
-        },
-      });
-      
-      this.web3auth.configureAdapter(openloginAdapter);
-
-      // Subscribe to Web3Auth events
-      this.subscribeToEvents();
-
-      await this.web3auth.initModal();
-      
-      // Check if user was previously logged in
-      if (await this.store.get('isLoggedIn')) {
-        try {
-          // Attempt to reconnect
-          await this.web3auth.connect();
-          this.provider = this.web3auth.provider;
-          await this.getUserInfo();
-        } catch (error) {
-          console.error('Failed to reconnect Web3Auth session:', error);
-          await this.store.set({
-            isLoggedIn: false,
-            userInfo: null,
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Failed to initialize Web3Auth:', error);
-    }
-  }
-
-  private subscribeToEvents() {
-    if (!this.web3auth) return;
-
-    this.web3auth.on(ADAPTER_EVENTS.CONNECTED, async (data) => {
-      console.log('Web3Auth connected:', data);
-      this.provider = this.web3auth!.provider;
-      await this.getUserInfo();
-      await this.store.set({ isLoggedIn: true });
-      
-      // Import the Web3Auth account to Rabby keyring
-      await this.importToKeyring();
-      
-      this.emit('connected', data);
-    });
-
-    this.web3auth.on(ADAPTER_EVENTS.DISCONNECTED, async () => {
-      console.log('Web3Auth disconnected');
-      this.provider = null;
-      await this.store.set({
-        isLoggedIn: false,
-        userInfo: null,
-      });
-      this.emit('disconnected');
-    });
-
-    this.web3auth.on(ADAPTER_EVENTS.ERRORED, (error) => {
-      console.error('Web3Auth error:', error);
-      this.emit('error', error);
-    });
-  }
-
-  public async login(): Promise<boolean> {
-    if (!this.web3auth) {
-      console.error('Web3Auth not initialized');
-      return false;
-    }
-
-    try {
-      this.provider = await this.web3auth.connect();
-      return true;
-    } catch (error) {
-      console.error('Error during Web3Auth login:', error);
-      return false;
-    }
-  }
-
-  public async logout(): Promise<void> {
-    if (!this.web3auth) {
-      console.error('Web3Auth not initialized');
+  // Public method to initialize Web3Auth
+  public async init(): Promise<void> {
+    if (this.web3auth) {
+      // console.log('Web3Auth already initialized.');
       return;
     }
-
     try {
-      await this.web3auth.logout();
-      this.provider = null;
-      await this.store.set({
-        isLoggedIn: false,
-        userInfo: null,
+      // console.log('Initializing Web3Auth...');
+      const chainConfig = {
+        chainNamespace: CHAIN_NAMESPACES.EIP155,
+        chainId: CHAINS.PULSE.chainId, // Use 0x171 for PulseChain mainnet (369 in decimal)
+        rpcTarget: CHAINS.PULSE.rpcURL,
+        displayName: CHAINS.PULSE.name,
+        blockExplorer: CHAINS.PULSE.blockExplorerURL,
+        ticker: CHAINS.PULSE.symbol,
+        tickerName: CHAINS.PULSE.name,
+      };
+
+      this.web3auth = new Web3Auth({
+        clientId: WEB3AUTH_CLIENT_ID,
+        web3AuthNetwork: WEB3AUTH_NETWORK as any, // Allowed values: 'sapphire_devnet', 'sapphire_mainnet', 'mainnet', 'cyan', 'aqua', 'celeste'
+        chainConfig,
+        uiConfig: {
+          appName: 'SwagTix',
+          theme: 'dark',
+          loginMethodsOrder: ['email_passwordless', 'google', 'twitter'],
+          defaultLanguage: 'en',
+        },
+        enableLogging: process.env.NODE_ENV === 'development',
       });
-      this.emit('disconnected');
-    } catch (error) {
-      console.error('Error during Web3Auth logout:', error);
-    }
-  }
 
-  public async getUserInfo() {
-    if (!this.web3auth || !this.web3auth.connected) {
-      console.error('Web3Auth not connected');
-      return null;
-    }
+      const privateKeyProvider = new EthereumPrivateKeyProvider({ config: { chainConfig } });
 
-    try {
-      const userInfo = await this.web3auth.getUserInfo();
-      await this.store.set({ userInfo });
-      return userInfo;
-    } catch (error) {
-      console.error('Error getting user info:', error);
-      return null;
-    }
-  }
-
-  public async getPrivateKey(): Promise<string | null> {
-    if (!this.provider) {
-      console.error('Provider not initialized');
-      return null;
-    }
-
-    try {
-      const privateKey = await this.provider.request({
-        method: 'eth_private_key',
+      const openloginAdapter = new OpenloginAdapter({
+        privateKeyProvider,
+        adapterSettings: {
+          uxMode: 'popup', // Can be 'popup' or 'redirect'
+          loginConfig: {
+            jwt: {
+              verifier: 'swagtix-email-verifier', // Name of your Web3Auth verifier
+              typeOfLogin: 'jwt',
+              clientId: WEB3AUTH_CLIENT_ID,
+            },
+          },
+        },
       });
-      return privateKey;
-    } catch (error) {
-      console.error('Error fetching private key:', error);
-      return null;
-    }
-  }
-
-  public async getAccounts(): Promise<string[]> {
-    if (!this.provider) {
-      console.error('Provider not initialized');
-      return [];
-    }
-
-    try {
-      const ethersProvider = new ethers.providers.Web3Provider(this.provider);
-      const signer = ethersProvider.getSigner();
-      const address = await signer.getAddress();
-      return [address];
-    } catch (error) {
-      console.error('Error getting accounts:', error);
-      return [];
-    }
-  }
-
-  public async getBalance(): Promise<string> {
-    if (!this.provider) {
-      console.error('Provider not initialized');
-      return '0';
-    }
-
-    try {
-      const ethersProvider = new ethers.providers.Web3Provider(this.provider);
-      const signer = ethersProvider.getSigner();
-      const address = await signer.getAddress();
-      const balance = await ethersProvider.getBalance(address);
-      return ethers.utils.formatEther(balance);
-    } catch (error) {
-      console.error('Error getting balance:', error);
-      return '0';
-    }
-  }
-
-  public async importToKeyring(): Promise<void> {
-    try {
-      const privateKey = await this.getPrivateKey();
-      if (!privateKey) {
-        throw new Error('Failed to get private key from Web3Auth');
+      this.web3auth.configureAdapter(openloginAdapter);
+      await this.web3auth.initModal();
+      // console.log('Web3Auth Modal initialized.');
+      if (this.web3auth.provider) {
+        this.provider = this.web3auth.provider;
+        // console.log('Web3Auth provider set.');
       }
-
-      // Check if the account already exists in keyring
-      const accounts = await keyringService.getAccounts();
-      const userInfo = await this.getUserInfo();
-      const email = userInfo?.email || 'web3auth-user';
-      
-      // Create a formatted private key (add 0x prefix if not present)
-      const formattedPrivateKey = privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`;
-      
-      // Import the private key to the keyring
-      await keyringService.importPrivateKey(formattedPrivateKey, `Web3Auth (${email})`);
-      
-      // Notify UI about the imported account
-      message.send('wallet_web3auth_imported');
     } catch (error) {
-      console.error('Error importing Web3Auth account to keyring:', error);
-      throw error;
+      console.error('Error initializing Web3Auth:', error);
+      this.web3auth = null; // Reset on error
+      throw error; // Re-throw to allow caller to handle
+    }
+  }
+
+  // Public method for email login
+  public async loginWithEmail(email: string): Promise<{ privateKey: string; email: string; name?: string } | null> {
+    if (!this.web3auth) {
+      // console.log('Web3Auth not initialized. Initializing now...');
+      await this.init(); // Ensure it's initialized
+      if (!this.web3auth) { // Check again after init attempt
+        throw new Error('Web3Auth could not be initialized.');
+      }
+    }
+    
+    try {
+      // console.log('Attempting Web3Auth login with email:', email);
+      // The OpenloginAdapter typically handles the UI for email input and OTP.
+      // The `connectTo` with `loginProvider: 'email_passwordless'` and specific `extraLoginOptions`
+      // might be needed if you want to trigger a specific flow.
+      // For a general email login, usually, initModal and then connect() is enough,
+      // and the modal allows the user to choose email.
+      // If you want to directly trigger email, it's more complex and might involve
+      // directly interacting with the OpenloginAdapter's specific methods if available,
+      // or ensuring your verifier is set up for direct email triggers.
+
+      // This simplified call assumes the modal will handle email input
+      // or that the verifier is set up for direct email.
+      const web3authProvider = await this.web3auth.connect();
+      if (!web3authProvider) {
+        // console.log('Web3Auth connect() did not return a provider.');
+        return null;
+      }
+      this.provider = web3authProvider;
+      // console.log('Web3Auth connected, provider obtained.');
+
+      const privateKey = await this.provider.request({ method: 'eth_private_key' });
+      const userInfo = await this.web3auth.getUserInfo();
+
+      // console.log('Login successful. Private Key:', privateKey, 'User Info:', userInfo);
+      return {
+        privateKey: privateKey as string,
+        email: userInfo.email || email, // Prefer email from Web3Auth if available
+        name: userInfo.name,
+      };
+    } catch (error) {
+      console.error('Web3Auth Login Error:', error);
+      return null;
     }
   }
 
   public async isLoggedIn(): Promise<boolean> {
-    return (await this.store.get('isLoggedIn')) || false;
+    if (!this.web3auth) {
+      try {
+        await this.init();
+      } catch (initError) {
+        console.error('Failed to init Web3Auth in isLoggedIn check:', initError);
+        return false;
+      }
+      if (!this.web3auth) return false;
+    }
+    // @ts-ignore TODO: web3auth.status is poorly typed upstream
+    return this.web3auth.status === 'connected';
   }
 
-  public async getProvider() {
+  public async getUserInfo(): Promise<any> {
+    if (!this.web3auth || !(await this.isLoggedIn())) {
+      // console.log('Cannot get user info, Web3Auth not connected.');
+      return null;
+    }
+    try {
+      const userInfo = await this.web3auth.getUserInfo();
+      // console.log('User Info from Web3Auth:', userInfo);
+      return userInfo;
+    } catch (error) {
+      console.error('Error getting user info from Web3Auth:', error);
+      return null;
+    }
+  }
+
+  public async logout(): Promise<void> {
+    if (!this.web3auth || !(await this.isLoggedIn())) {
+      // console.log('Not logged in or Web3Auth not initialized.');
+      return;
+    }
+    try {
+      // console.log('Logging out from Web3Auth...');
+      await this.web3auth.logout();
+      this.provider = null;
+      // console.log('Web3Auth logout successful.');
+    } catch (error) {
+      console.error('Web3Auth Logout Error:', error);
+    }
+  }
+
+  public getProvider(): SafeEventEmitterProvider | null {
     return this.provider;
-  }
-
-  public async getWeb3AuthUserInfo() {
-    return await this.store.get('userInfo');
   }
 }
 
-export default new Web3AuthService();
+// Export a singleton instance
+const web3authService = new Web3AuthService();
+export default web3authService;
