@@ -1,33 +1,26 @@
+/**
+ * BlockedButton
+ *
+ * Original behaviour: display tokens that the user had manually blocked,
+ * fetched from the complex Rabby Redux store.  In the trimmed SwagTix wallet
+ * we no longer maintain that store nor expose a *blocked-tokens* feature.
+ *
+ * For now the component simply renders `null`, removing the button from the UI
+ * and eliminating dependence on the removed store selectors.  If a future
+ * version of SwagTix re-introduces the concept of blocked tokens this
+ * component can be re-implemented with a lightweight data source.
+ */
+
 import React from 'react';
-import { TokenButton } from './components/TokenButton';
-import { useRabbySelector } from '@/ui/store';
-import useSortToken from '@/ui/hooks/useSortTokens';
-import { useTranslation } from 'react-i18next';
 
 interface Props {
   onClickLink: () => void;
   isTestnet: boolean;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const BlockedButton: React.FC<Props> = ({ onClickLink, isTestnet }) => {
-  const { blocked } = useRabbySelector((store) =>
-    isTestnet ? store.account.testnetTokens : store.account.tokens
-  );
-  const list = useSortToken(blocked);
-  const { t } = useTranslation();
-
-  return (
-    <TokenButton
-      label={t('page.dashboard.tokenDetail.blockedButton')}
-      modalTitle={
-        list?.length > 1
-          ? t('page.dashboard.tokenDetail.blockedListTitles')
-          : t('page.dashboard.tokenDetail.blockedListTitle')
-      }
-      tokens={list}
-      linkText={t('page.dashboard.assets.blockLinkText')}
-      description={t('page.dashboard.assets.blockDescription')}
-      onClickLink={onClickLink}
-    />
-  );
+  return null;
 };
+
+export default BlockedButton;

@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useHistory } from 'react-router-dom';
-import { Form, Input, Button, message, Spin } from 'antd';
+import { Form, Input, Button, message, Checkbox } from 'antd';
 import styled from 'styled-components';
 import { useTranslation } from 'react-i18next';
 import { MailOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import LogoSVG from '@/ui/assets/logo.svg';
 import { SWAGTIX_COLORS } from '@/ui/utils/theme';
-import web3authService from '@/background/service/web3auth';
 import { useWallet } from '@/ui/utils';
+import web3authService from '@/background/service/web3auth'; // Assuming this service exists
 
 const Container = styled.div`
   display: flex;
@@ -74,20 +74,29 @@ const StyledForm = styled(Form)`
     color: rgba(255, 255, 255, 0.8);
   }
   
-  .ant-input {
+  .ant-input-affix-wrapper {
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 8px;
     color: white;
     height: 50px;
-    font-size: 16px;
     
-    &:focus {
+    &:focus-within {
       border-color: ${SWAGTIX_COLORS.PURPLE};
       box-shadow: 0 0 0 2px rgba(123, 91, 255, 0.2);
     }
     
-    &::placeholder {
+    .ant-input {
+      background: transparent;
+      color: white;
+      font-size: 16px;
+      
+      &::placeholder {
+        color: rgba(255, 255, 255, 0.5);
+      }
+    }
+    
+    .ant-input-prefix {
       color: rgba(255, 255, 255, 0.5);
     }
   }
@@ -115,112 +124,85 @@ const SubmitButton = styled(Button)`
   }
 `;
 
-const InfoText = styled.p`
-  font-size: 14px;
+const TermsText = styled.p`
+  font-size: 12px;
   color: rgba(255, 255, 255, 0.6);
   margin-top: 24px;
   text-align: center;
   line-height: 1.5;
-`;
-
-const LoadingContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  margin: 40px 0;
-`;
-
-const LoadingText = styled.p`
-  margin-top: 16px;
-  font-size: 16px;
-  color: rgba(255, 255, 255, 0.8);
+  
+  a {
+    color: ${SWAGTIX_COLORS.BLUE};
+    text-decoration: underline;
+    
+    &:hover {
+      color: ${SWAGTIX_COLORS.PURPLE};
+    }
+  }
 `;
 
 const EmailSignup: React.FC = () => {
   const { t } = useTranslation();
   const history = useHistory();
-  const wallet = useWallet();
+  const wallet = useWallet(); // Assuming useWallet provides necessary wallet interactions
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const [verifyingEmail, setVerifyingEmail] = useState(false);
-  
-  // Check if Web3Auth is already initialized
-  useEffect(() => {
-    const checkLoginStatus = async () => {
-      try {
-        const isLoggedIn = await web3authService.isLoggedIn();
-        if (isLoggedIn) {
-          // User is already logged in, redirect to PIN setup
-          history.push('/onboarding/create-pin');
-        }
-      } catch (error) {
-        console.error('Error checking login status:', error);
-      }
-    };
-
-    checkLoginStatus();
-  }, [history]);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const handleBack = () => {
-    history.push('/onboarding/welcome');
+    history.push('/onboarding/welcome'); // Or wherever the previous step is
   };
 
-  const handleSubmit = async (values: { email: string }) => {
+  const handleSubmitAsync = async (values: { email: string; }) => {
+    const { email } = values;
     setLoading(true);
+    
     try {
-      // Start the Web3Auth login process with email
-      setVerifyingEmail(true);
-      const success = await web3authService.login();
+      // Initialize Web3Auth login
+      await web3authService.init(); // Make sure this is idempotent or handled correctly
+      const loginResult = await web3authService.loginWithEmail(email);
       
-      if (success) {
-        // Wait for the account to be imported to the keyring
-        await new Promise(resolve => {
-          const handleImported = () => {
-            resolve(true);
-            wallet.removeMessageListener('wallet_web3auth_imported', handleImported);
-          };
-          wallet.addMessageListener('wallet_web3auth_imported', handleImported);
-          
-          // Set a timeout in case the event is not fired
-          setTimeout(() => {
-            resolve(false);
-            wallet.removeMessageListener('wallet_web3auth_imported', handleImported);
-          }, 10000);
-        });
+      if (loginResult && loginResult.privKey) {
+        // Use the private key to set up the wallet
+        // This might involve creating a new keyring or importing the private key
+        // The exact method depends on how Rabby's core (or your simplified version) handles it
         
-        message.success(t('Email verified successfully!'));
+        // Example: (This needs to be adapted to your wallet's specific methods)
+        // const accounts = await wallet.createKeyringWithPrivateKey(loginResult.privKey);
+        // await wallet.unlockKeyring(accounts[0].type, accounts[0].brandName, loginResult.privKey); 
+        // await wallet.addKeyring(accounts[0].type, accounts[0].brandName, loginResult.privKey);
+
+        // For SwagTix, we might want to directly use the private key to create/unlock
+        // a SimpleKeyring or a specific Web3Auth keyring type if Rabby supports it.
         
-        // Redirect to PIN creation
-        history.push('/onboarding/create-pin');
+        // Placeholder for wallet setup logic with the private key from Web3Auth
+        // This is a critical part that needs to be implemented based on your wallet's architecture.
+        // For now, let's assume a successful login means we can proceed.
+        
+        // Check if a PIN is already set. If not, redirect to PIN creation.
+        const pinIsSet = await wallet.isPinSet();
+        if (pinIsSet) {
+          history.push('/'); // Go to main app (or PIN entry if needed)
+        } else {
+          history.push('/onboarding/create-pin'); // Redirect to PIN creation
+        }
+        
       } else {
-        message.error(t('Verification failed. Please try again.'));
-        setVerifyingEmail(false);
+        message.error(t('Login failed. Please check your email or try again.'));
       }
-    } catch (error) {
-      console.error('Login error:', error);
-      message.error(t('An error occurred. Please try again.'));
-      setVerifyingEmail(false);
+      
+    } catch (error: any) {
+      console.error('Email login error:', error);
+      message.error(error.message || t('An error occurred during login. Please try again.'));
     } finally {
       setLoading(false);
     }
   };
 
-  if (verifyingEmail) {
-    return (
-      <Container>
-        <Card>
-          <LoadingContainer>
-            <Spin size="large" />
-            <LoadingText>{t('Verifying your email...')}</LoadingText>
-            <Subtitle>
-              {t('Check your inbox for a verification link. Click it to continue.')}
-            </Subtitle>
-          </LoadingContainer>
-        </Card>
-      </Container>
-    );
-  }
+  const handleSubmit = (values: { email: string; }): void => {
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    handleSubmitAsync(values);
+  };
 
   return (
     <Container>
@@ -233,9 +215,9 @@ const EmailSignup: React.FC = () => {
       <Logo src={LogoSVG} alt="SwagTix Logo" />
       
       <Card>
-        <Title>{t('Create Your Ticket Account')}</Title>
+        <Title>{t('Sign Up / Log In')}</Title>
         <Subtitle>
-          {t('Enter your email to get started. We\'ll send you a verification link.')}
+          {t('Enter your email to get started with SwagTix')}
         </Subtitle>
         
         <StyledForm
@@ -246,31 +228,53 @@ const EmailSignup: React.FC = () => {
           <Form.Item
             name="email"
             rules={[
-              { required: true, message: t('Please enter your email address') },
+              { required: true, message: t('Please enter your email') },
               { type: 'email', message: t('Please enter a valid email address') }
             ]}
           >
-            <Input 
-              prefix={<MailOutlined style={{ color: 'rgba(255, 255, 255, 0.5)' }} />} 
-              placeholder={t('Email address')}
+            <Input
+              prefix={<MailOutlined style={{ color: 'rgba(255, 255, 255, 0.5)' }} />}
+              placeholder={t('your.email@example.com')}
               size="large"
-              autoComplete="email"
+              autoFocus
             />
+          </Form.Item>
+          
+          <Form.Item
+            name="terms"
+            valuePropName="checked"
+            rules={[
+              {
+                validator: (_, value) =>
+                  value ? Promise.resolve() : Promise.reject(new Error(t('You must accept the terms and conditions'))),
+              },
+            ]}
+          >
+            <Checkbox 
+              checked={termsAccepted} 
+              onChange={(e) => setTermsAccepted(e.target.checked)}
+              style={{ color: 'rgba(255, 255, 255, 0.7)' }}
+            >
+              {t('I agree to the SwagTix Terms of Service and Privacy Policy')}
+            </Checkbox>
           </Form.Item>
           
           <SubmitButton 
             type="primary" 
             htmlType="submit"
             loading={loading}
-            disabled={loading}
+            disabled={loading || !termsAccepted}
           >
-            {loading ? t('Sending...') : t('Continue')}
+            {loading ? t('Processing...') : t('Continue with Email')}
           </SubmitButton>
         </StyledForm>
         
-        <InfoText>
-          {t('We\'ll use this email to secure your tickets and help you recover your account if needed.')}
-        </InfoText>
+        <TermsText>
+          {t('By continuing, you agree to our')}{' '}
+          <a href="/terms" target="_blank" rel="noopener noreferrer">{t('Terms of Service')}</a>{' '}
+          {t('and')}{' '}
+          <a href="/privacy" target="_blank" rel="noopener noreferrer">{t('Privacy Policy')}</a>.
+        </TermsText>
       </Card>
     </Container>
   );

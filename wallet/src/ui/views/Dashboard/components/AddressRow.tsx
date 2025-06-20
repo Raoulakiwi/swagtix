@@ -17,10 +17,8 @@ import {
   WALLET_BRAND_CONTENT,
 } from '@/constant';
 import { AddressViewer } from '@/ui/component';
-import { connectStore, useRabbyDispatch, useRabbySelector } from '@/ui/store';
 import useIsMountedRef from '@/ui/hooks/useMountedRef';
 import { useTranslation } from 'react-i18next';
-import ThemeIcon from '@/ui/component/ThemeMode/ThemeIcon';
 
 function AddressRow({
   data,
@@ -38,16 +36,9 @@ function AddressRow({
   onCopy?: (account: Account) => void;
 }) {
   const wallet = useWallet();
-  const { highlightedAddresses } = useRabbySelector((s) => ({
-    highlightedAddresses: s.addressManagement.highlightedAddresses,
-  }));
-  const dispatch = useRabbyDispatch();
+  // Highlight/star feature removed in simplified wallet
 
-  const account = data[index];
-  const favorited = highlightedAddresses.some(
-    (highlighted) =>
-      account.address === highlighted.address &&
-      account.brandName === highlighted.brandName
+  const favorited = false;
   );
   const { t } = useTranslation();
 
@@ -123,20 +114,6 @@ function AddressRow({
                 <span className="address-hdpath-index font-roboto-mono">{`#${hdPathIndex}`}</span>
               )}
             </div>
-            <span className={clsx('ml-[3px] favorite-star flex-shrink-0')}>
-              <ThemeIcon
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (account)
-                    dispatch.addressManagement.toggleHighlightedAddressAsync({
-                      address: account.address,
-                      brandName: account.brandName,
-                    });
-                }}
-                src={favorited ? RcIconPinnedFill : RcIconPinned}
-                className={clsx('w-[12px] h-[12px]')}
-              />
-            </span>
           </div>
           <div className="flex items-center">
             <AddressViewer
@@ -167,5 +144,8 @@ function AddressRow({
 
 /**
  * @deprecated
+ * In the trimmed SwagTix wallet we no longer use the Rabby Redux store,
+ * so we export the plain component.
  */
-export default connectStore()(AddressRow);
+
+export default AddressRow;

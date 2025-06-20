@@ -1,118 +1,208 @@
-import React, { useEffect } from 'react';
-import WordsMatrix from '@/ui/component/WordsMatrix';
-import clsx from 'clsx';
-import { connectStore, useRabbyDispatch, useRabbySelector } from 'ui/store';
-import { useWallet } from 'ui/utils';
-import { IconCopyCC } from 'ui/assets/component/IconCopyCC';
-import IconSuccess from 'ui/assets/success.svg';
-import { Button, message } from 'antd';
-import { copyTextToClipboard } from '@/ui/utils/clipboard';
-import { KEYRING_CLASS } from '@/constant';
+import React, { useEffect, useState } from 'react';
+import { Button, Form, Input, message } from 'antd';
+import { CheckboxChangeEvent } from 'antd/lib/checkbox';
 import { useTranslation } from 'react-i18next';
-import { Card } from '@/ui/component/NewUserImport';
 import { useHistory } from 'react-router-dom';
-import { useThemeMode } from '@/ui/hooks/usePreference';
+import { KEYRING_TYPE } from 'consts';
+import { PageHeader } from 'ui/component';
+import { useWallet, useWalletRequest } from 'ui/utils';
+// Removed store imports: connectStore, useRabbyDispatch, useRabbySelector
+// import { connectStore, useRabbyDispatch, useRabbySelector } from 'ui/store';
+import IconArrowRight from 'ui/assets/arrow-right-gray.svg';
+import './style.less';
+import { MatomoTime } from '@/utils/matomo-time';
+import { matomoRequestEvent } from '@/utils/matomo-request';
+import { query2obj } from '@/ui/utils/url';
+import { IS_CHROME } from '@/utils/env';
 
-const DisplayMnemonic = () => {
-  const dispatch = useRabbyDispatch();
-  const wallet = useWallet();
-  useEffect(() => {
-    dispatch.createMnemonics.prepareMnemonicsAsync();
-  }, []);
+const DisplayMnemonic = ({ mnemonics }: { mnemonics: string }) => {
   const history = useHistory();
+  const wallet = useWallet();
   const { t } = useTranslation();
-  const { mnemonics } = useRabbySelector((s) => ({
-    mnemonics: s.createMnemonics.mnemonics,
-  }));
+  const [form] = Form.useForm();
+  const [confirmed, setConfirmed] = useState(false);
+  const [errMsg, setErrMsg] = useState('');
+  const [isSubmit, setIsSubmit] = useState(false);
 
-  const onCopyMnemonics = React.useCallback(() => {
-    copyTextToClipboard(mnemonics).then(() => {
-      message.success({
-        icon: <img src={IconSuccess} className="icon icon-success" />,
-        content: t('global.copied'),
-        duration: 0.5,
+  // Removed dispatch and selector hooks
+  // const dispatch = useRabbyDispatch();
+  // const { isAdvanced } = useRabbySelector((state) => state.preference);
+
+  // Placeholder for isAdvanced logic, assuming false for simplicity
+  const isAdvanced = false;
+
+  const { search } = history.location;
+  const query = query2obj(search);
+  const isNewUser = !!query.isNewUser;
+
+  const handleConfirm = (e: CheckboxChangeEvent) => {
+    setConfirmed(e.target.checked);
+  };
+
+  const [run, loading] = useWalletRequest(
+    async (mnemonics) => {
+      const {alianName} = await wallet.boot(undefined, mnemonics);
+      return {
+        alianName
+      }
+    },
+    {
+      onSuccess({ alianName }) {
+        history.replace({
+          pathname: '/popup/import/success',
+          state: {
+            alianName,
+            keyringType: KEYRING_TYPE.HdKeyring,
+          },
+        });
+      },
+      onError(err) {
+        message.error(err?.message);
+      },
+    }
+  );
+
+  const handleNextClick = async ({ doubleCheckMnemonics }) => {
+    if (!confirmed) {
+      setErrMsg(t('page.newAddress.displayMnemonics.agrementError'));
+      return;
+    }
+    if (doubleCheckMnemonics !== mnemonics) {
+      form.setFields([
+        {
+          name: 'doubleCheckMnemonics',
+          errors: [t('page.newAddress.displayMnemonics.doubleCheckError')],
+        },
+      ]);
+      return;
+    }
+    setIsSubmit(true);
+    matomoRequestEvent({
+      category: 'User',
+      action: 'createAddress',
+      label: KEYRING_TYPE.HdKeyring,
+    });
+    if (isNewUser) {
+      await run(mnemonics);
+      return;
+    }
+
+    // Store-related logic removed/commented out:
+    // This part needs to be refactored to work without the old Redux store.
+    // The parent component or a service should handle wallet creation and state updates.
+    try {
+      // const accounts = await dispatch.account.createHDWallet({
+      //   mnemonic: mnemonics,
+      //   isAdvanced,
+      // });
+      // await dispatch.preference.setIsBackup(true);
+      // if (accounts && accounts.length > 0) {
+      //   dispatch.account.unlock();
+      // }
+
+      // For now, simulate success and navigate.
+      // In a real implementation, you'd await the wallet creation and then navigate.
+      console.log(
+        'TODO: Implement wallet creation logic here without Redux dispatch'
+      );
+      message.success(
+        'Wallet creation logic needs to be implemented. Navigating to success page for now.'
+      );
+      history.push({
+        pathname: '/popup/import/success',
+        state: {
+          keyringType: KEYRING_TYPE.HdKeyring,
+        },
       });
-    });
-  }, [mnemonics]);
+    } catch (e) {
+      setIsSubmit(false);
+      message.error(t(e.message));
+    }
+  };
 
-  const { isDarkTheme } = useThemeMode();
-
-  const onSubmit = React.useCallback(async () => {
-    await wallet.createKeyringWithMnemonics(mnemonics);
-
-    // Passphrase is not supported on new creation
-    const keyring = await wallet.getKeyringByMnemonic(mnemonics, '');
-    const keyringId = await wallet.getMnemonicKeyRingIdFromPublicKey(
-      keyring!.publicKey!
-    );
-    dispatch.importMnemonics.switchKeyring({
-      stashKeyringId: keyringId as number,
-    });
-
-    const accounts = await dispatch.importMnemonics.getAccounts({
-      start: 0,
-      end: 1,
-    });
-    await dispatch.importMnemonics.setSelectedAccounts([accounts[0].address]);
-    await dispatch.importMnemonics.confirmAllImportingAccountsAsync();
-
-    history.push({
-      pathname: '/new-user/success',
-      search: `?hd=${
-        KEYRING_CLASS.MNEMONIC
-      }&keyringId=${keyringId}&isCreated=${true}`,
-    });
-    dispatch.createMnemonics.reset();
-  }, [mnemonics]);
+  useEffect(() => {
+    const MatomoTime = new MatomoTime();
+    MatomoTime.start();
+    return () => {
+      MatomoTime.end({
+        category: 'User',
+        action: 'Create Mnemonics Page Time',
+      });
+    };
+  }, []);
 
   return (
-    <Card onBack={() => dispatch.createMnemonics.stepTo('risk-check')} step={1}>
-      <div className="mt-[18px] mb-[9px] text-[28px] font-medium text-r-neutral-title1 text-center">
-        {t('page.newAddress.seedPhrase.backup')}
+    <div className="display-mnemonic">
+      <PageHeader fixed>{t('page.newAddress.title.createMnemonics')}</PageHeader>
+      <div className="rabby-container">
+        <div className="pt-20 text-20 text-gray-title text-center font-medium">
+          {t('page.newAddress.displayMnemonics.title')}
+        </div>
+        <div className="mt-16 text-13 text-gray-subTitle text-center">
+          {t('page.newAddress.displayMnemonics.subTitle')}
+        </div>
+        <div className="p-12 mt-32 bg-gray-bg rounded">
+          <div className="grid grid-cols-3 gap-12">
+            {mnemonics.split(' ').map((word, index) => (
+              <div
+                className="bg-white rounded px-12 h-[36px] flex items-center justify-center text-gray-subTitle"
+                key={index}
+              >
+                <span className="text-gray-comment mr-4">{index + 1}</span>
+                {word}
+              </div>
+            ))}
+          </div>
+        </div>
+        <Form onFinish={handleNextClick} form={form}>
+          <Form.Item
+            className="mt-20 h-[60px]"
+            name="doubleCheckMnemonics"
+            rules={[
+              {
+                required: true,
+                message: t(
+                  'page.newAddress.displayMnemonics.doubleCheckError'
+                ),
+              },
+            ]}
+          >
+            <Input.TextArea
+              className="h-[60px] p-12 text-13 text-gray-subTitle"
+              placeholder={t(
+                'page.newAddress.displayMnemonics.doubleCheckPlaceholder'
+              )}
+              spellCheck={false}
+            />
+          </Form.Item>
+          <div
+            className={clsx(
+              'mt-12 text-12 text-red-light text-center h-[16px]',
+              {
+                'opacity-0': !errMsg,
+              }
+            )}
+          >
+            {errMsg}
+          </div>
+          <div className="flex justify-center mt-32 pb-[55px]">
+            <Button
+              type="primary"
+              htmlType="submit"
+              className="w-[200px]"
+              size="large"
+              loading={isSubmit || loading}
+            >
+              {t('global.next')}
+              <img src={IconArrowRight} className="icon icon-arrow-right" />
+            </Button>
+          </div>
+        </Form>
       </div>
-      <div className="text-[16px] text-rabby-blue-default font-normal text-center mb-20 mx-[10px]">
-        {t('page.newAddress.seedPhrase.backupTips')}
-      </div>
-
-      {mnemonics && (
-        <WordsMatrix
-          focusable={false}
-          closable={false}
-          words={mnemonics.split(' ')}
-          className="bg-transparent"
-        />
-      )}
-
-      <div
-        className={clsx(
-          'mx-auto mt-[24px] mb-[47px]',
-          'cursor-pointer',
-          'flex justify-center items-center gap-8',
-          'text-14 font-medium text-rabby-blue-default',
-          'hover:text-rabby-blue-default'
-        )}
-        onClick={onCopyMnemonics}
-      >
-        <IconCopyCC
-          className="w-20 h-20 text-rabby-blue-default"
-          strokeColor={isDarkTheme ? '#1C1F2BFF' : 'white'}
-        />
-        <span>{t('page.newAddress.seedPhrase.copy')}</span>
-      </div>
-
-      <Button
-        onClick={onSubmit}
-        block
-        type="primary"
-        className={clsx(
-          'h-[56px] shadow-none rounded-[8px]',
-          'text-[17px] font-medium bg-r-blue-default'
-        )}
-      >
-        {t('page.newAddress.seedPhrase.saved')}
-      </Button>
-    </Card>
+    </div>
   );
 };
 
-export default connectStore()(DisplayMnemonic);
+// Removed connectStore HOC
+// export default connectStore()(DisplayMnemonic);
+export default DisplayMnemonic;

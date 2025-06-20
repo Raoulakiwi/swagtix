@@ -7,8 +7,7 @@ import { AddCustomTokenPopup } from './CustomAssetList/AddCustomTokenPopup';
 import { TokenItem } from '@rabby-wallet/rabby-api/dist/types';
 import { useTranslation } from 'react-i18next';
 import { SpecialTokenListPopup } from './components/TokenButton';
-import { useRabbySelector } from '@/ui/store';
-import useSortToken from '@/ui/hooks/useSortTokens';
+
 
 type Props = {
   onConfirm?: React.ComponentProps<typeof AddCustomTokenPopup>['onConfirm'];
@@ -31,8 +30,9 @@ const AddTokenEntry = React.forwardRef<AddTokenEntryInst, Props>(
     //   null
     // );
 
-    const { customize } = useRabbySelector((store) => store.account.tokens);
-    const tokens = useSortToken(customize);
+    // In the trimmed SwagTix wallet we no longer track a global customized
+    // token list via Redux.  Render the popup with an empty list for now.
+    const tokens: TokenItem[] = [];
 
     const [showCustomizedTokens, setShowCustomizedTokens] = React.useState(
       false

@@ -1,69 +1,106 @@
-import { Token as CustomizedToken } from '@/background/service/preference';
-import { useRabbySelector } from '@/ui/store';
 import { useWallet } from '@/ui/utils';
-import {
-  walletProject,
-  setWalletTokens,
-  sortWalletTokens,
-} from '@/ui/utils/portfolio/tokenUtils';
-import { AbstractPortfolioToken } from '@/ui/utils/portfolio/types';
 import { TokenItem } from '@rabby-wallet/rabby-api/dist/types';
-import produce from 'immer';
-import React from 'react';
+import { useCallback, useEffect, useState } from 'react';
+
+// Since the original Rabby store (and useRabbySelector) is removed,
+// this hook will now return default/empty values for customized tokens.
+// The functionality of managing a user-defined list of custom tokens is
+// considered out of scope for the simplified SwagTix NFT ticket wallet.
 
 export const useCustomizedToken = () => {
   const wallet = useWallet();
-  const [tokens, setTokens] = React.useState<AbstractPortfolioToken[]>();
-  const { currentAccount } = useRabbySelector((s) => ({
-    currentAccount: s.account.currentAccount,
-  }));
-  const add = React.useCallback(async (token: CustomizedToken) => {
-    await wallet.addCustomizedToken(token);
-    getAll();
-  }, []);
+  const [customizedTokenList, setCustomizedTokenList] = useState<TokenItem[]>(
+    []
+  );
+  const [blockedTokenList, setBlockedTokenList] = useState<TokenItem[]>([]);
 
-  const remove = React.useCallback(async (token: CustomizedToken) => {
-    await wallet.removeCustomizedToken(token);
-    getAll();
-  }, []);
+  // In the original Rabby, this would fetch from a persisted store.
+  // For SwagTix, we'll keep it simple: no persisted custom tokens.
+  const getCustomizedTokenList = useCallback(async () => {
+    // const account = await wallet.getCurrentAccount();
+    // if (!account) return [];
+    // const list = await wallet.getCustomizedToken(account.address);
+    // setCustomizedTokenList(list);
+    // return list;
+    setCustomizedTokenList([]); // Always return empty for simplified wallet
+    return [];
+  }, [/* wallet */]); // wallet dependency removed as it's not used
 
-  const getAll = React.useCallback(async () => {
-    const list = await wallet.getCustomizedToken();
-    const uuids = list.map((item) => `${item.chain}:${item.address}`);
-    const tokenRes = await wallet.openapi.customListToken(
-      uuids,
-      currentAccount!.address
-    );
-    const tokensDict: Record<string, TokenItem[]> = {};
-    tokenRes.forEach((token) => {
-      if (!tokensDict[token.chain]) {
-        tokensDict[token.chain] = [];
-      }
-      tokensDict[token.chain].push(token);
-    });
+  const getBlockedTokenList = useCallback(async () => {
+    // const account = await wallet.getCurrentAccount();
+    // if (!account) return [];
+    // const list = await wallet.getBlockedToken(account.address);
+    // setBlockedTokenList(list);
+    // return list;
+    setBlockedTokenList([]); // Always return empty for simplified wallet
+    return [];
+  }, [/* wallet */]); // wallet dependency removed as it's not used
 
-    let _data = produce(walletProject, (draft) => {
-      draft.netWorth = 0;
-      draft._netWorth = '$0';
-      draft._netWorthChange = '-';
-      draft.netWorthChange = 0;
-      draft._netWorthChangePercent = '';
-    });
-    _data = produce(_data, (draft) => {
-      setWalletTokens(draft, tokensDict);
-    });
-    const customizedTokens = sortWalletTokens(_data);
+  useEffect(() => {
+    getCustomizedTokenList();
+    getBlockedTokenList();
+  }, [getCustomizedTokenList, getBlockedTokenList]);
 
-    setTokens(customizedTokens);
-  }, []);
+  const addCustomizedToken = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async (token: TokenItem) => {
+      // No-op: Customized tokens are not a feature in the simplified wallet.
+      // await getCustomizedTokenList(); // Refresh list (not needed now)
+      return Promise.resolve();
+    },
+    [/* getCustomizedTokenList */]
+  );
 
-  React.useEffect(() => {
-    getAll();
-  }, []);
+  const removeCustomizedToken = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async (token: TokenItem) => {
+      // No-op
+      // await getCustomizedTokenList(); // Refresh list (not needed now)
+      return Promise.resolve();
+    },
+    [/* getCustomizedTokenList */]
+  );
+
+  const editCustomizedToken = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async (token: TokenItem) => {
+      // No-op
+      // await getCustomizedTokenList(); // Refresh list (not needed now)
+      return Promise.resolve();
+    },
+    [/* getCustomizedTokenList */]
+  );
+
+  const getCustomizedTokenById = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    (id: string, chain?: string) => {
+      // No-op, always return null as there are no customized tokens
+      return null;
+    },
+    [/* customizedTokenList */] // No longer depends on customizedTokenList
+  );
+
+  const checkToken = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    (item: TokenItem) => {
+      // No-op, always return false as there are no customized or blocked tokens
+      return {
+        isAdded: false,
+        isBlocked: false,
+      };
+    },
+    [/* customizedTokenList, blockedTokenList */] // No longer depends on these lists
+  );
 
   return {
-    add,
-    remove,
-    tokens,
+    customizedTokenList,
+    blockedTokenList,
+    addCustomizedToken,
+    removeCustomizedToken,
+    editCustomizedToken,
+    getCustomizedTokenById,
+    checkToken,
+    getCustomizedTokenList,
+    getBlockedTokenList,
   };
 };

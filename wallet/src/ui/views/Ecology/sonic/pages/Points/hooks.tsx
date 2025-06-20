@@ -1,5 +1,10 @@
-import { useRabbySelector } from '@/ui/store';
-import { useEffect, useMemo, useState } from 'react';
+/**
+ * In the trimmed-down SwagTix wallet the Rabby store has been removed and
+ * Sonic-Points integration is out-of-scope.  We therefore replace the original
+ * hook with a lightweight stub that returns safe default values and a no-op
+ * `refetch` so that callers do not break at runtime.
+ */
+import { useCallback } from 'react';
 import { getAddress } from 'viem';
 
 async function fetchReferralData(address: string) {
@@ -45,66 +50,23 @@ async function fetchPoints(address: string) {
 }
 
 export const useSonicData = () => {
-  const account = useRabbySelector((state) => state.account.currentAccount);
-  const [pointsData, setPointsData] = useState<
-    Awaited<ReturnType<typeof fetchPoints>>
-  >();
-  const [referralData, setReferralData] = useState<
-    Awaited<ReturnType<typeof fetchReferralData>>
-  >();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [refetchCount, setRefetchCount] = useState(0);
+  // SwagTix: Sonic integration removed – return defaults
+  const pointsData = undefined as Awaited<ReturnType<typeof fetchPoints>>;
+  const referralData = undefined as Awaited<
+    ReturnType<typeof fetchReferralData>
+  >;
+  const loading = false;
+  const error: string | null = null;
 
-  const totalPoints = useMemo(() => {
-    return (pointsData?.totalPoints ?? 0) + (referralData?.referralPoints ?? 0);
-  }, [pointsData, referralData]);
+  const totalPoints = 0;
 
-  const referralCode = useMemo(() => {
-    return referralData?.referralCode;
-  }, [referralData]);
+  const referralCode = undefined;
 
-  const address = useMemo(() => {
-    if (!account?.address) {
-      return null;
-    }
-    return getAddress(account.address);
-  }, [account]);
+  const address = null;
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-
-      if (!address) {
-        setPointsData(undefined);
-        setReferralData(undefined);
-        setLoading(false);
-        setError(null);
-        return;
-      }
-
-      try {
-        const [pointsData, referralData] = await Promise.all([
-          fetchPoints(address),
-          fetchReferralData(address),
-        ]);
-
-        setPointsData(pointsData);
-        setReferralData(referralData);
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [address, refetchCount]);
-
-  const refetch = () => {
-    setRefetchCount((prev) => prev + 1);
-  };
+  const refetch = useCallback(() => {
+    /* no-op – Sonic endpoints disabled */
+  }, []);
 
   return {
     points: pointsData,

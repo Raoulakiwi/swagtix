@@ -1,8 +1,7 @@
 import { useWallet } from '@/ui/utils';
 import React from 'react';
 import { CollectionList } from '@rabby-wallet/rabby-api/dist/types';
-import { useRabbySelector } from '@/ui/store';
-import { Token } from '@/background/service/preference';
+import { Token, Account } from '@/background/service/preference';
 
 export const useCollection = () => {
   const wallet = useWallet();
@@ -10,7 +9,9 @@ export const useCollection = () => {
   const [isLoading, setIsLoading] = React.useState(false);
   const [list, setList] = React.useState<CollectionList[]>([]);
   const [starredList, setStarredList] = React.useState<CollectionList[]>([]);
-  const { currentAccount } = useRabbySelector((s) => s.account);
+  const [currentAccount, setCurrentAccount] = React.useState<Account | null>(
+    null
+  );
 
   const checkStarred = React.useCallback(
     (collection: CollectionList) => {
@@ -59,6 +60,14 @@ export const useCollection = () => {
   React.useEffect(() => {
     wallet.getCollectionStarred().then(setStarredToken);
   }, []);
+
+  // fetch current account once
+  React.useEffect(() => {
+    (async () => {
+      const acc = await wallet.getCurrentAccount();
+      setCurrentAccount(acc || null);
+    })();
+  }, [wallet]);
 
   React.useEffect(() => {
     if (currentAccount) {

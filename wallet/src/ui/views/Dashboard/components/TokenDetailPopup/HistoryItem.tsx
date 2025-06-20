@@ -1,5 +1,5 @@
 import styled from 'styled-components';
-import { TxDisplayItem, TxHistoryItem } from '@/background/service/openapi';
+import { TxDisplayItem } from '@/background/service/openapi';
 import { TokenChange, TxInterAddressExplain } from '@/ui/component';
 import clsx from 'clsx';
 import React from 'react';
@@ -10,6 +10,11 @@ import { useTranslation } from 'react-i18next';
 import { TooltipWithMagnetArrow } from '@/ui/component/Tooltip/TooltipWithMagnetArrow';
 import { findChain } from '@/utils/chain';
 import { getTxScanLink } from '@/utils';
+
+// Placeholder for removed OpenAPI type
+interface TxHistoryItem {
+  [key: string]: any;
+}
 
 type HistoryItemProps = {
   data: TxDisplayItem | TxHistoryItem;

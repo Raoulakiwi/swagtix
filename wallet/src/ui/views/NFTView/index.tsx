@@ -4,10 +4,8 @@ import { PageHeader } from 'ui/component';
 import './style.less';
 import { CollectionCard } from './CollectionCard';
 import { Modal, Tabs } from 'antd';
-import { useRabbySelector } from '@/ui/store';
 import { NFTItem } from '@rabby-wallet/rabby-api/dist/types';
 import { matomoRequestEvent } from '@/utils/matomo-request';
-import { getKRCategoryByType } from '@/utils/transaction';
 import NFTModal from '../Dashboard/components/NFT/NFTModal';
 import { CollectionListSkeleton } from './CollectionListSkeleton';
 import styled from 'styled-components';
@@ -69,7 +67,6 @@ export const NFTView: React.FC = () => {
     history.replace('/');
   }, [history]);
   const [tab, setTab] = React.useState('all');
-  const { currentAccount } = useRabbySelector((s) => s.account);
   const [nftItem, setNFTItem] = React.useState<NFTItem | null>(null);
   const [collectionName, setCollectionName] = React.useState<string>();
   const [modalVisible, setModalVisible] = React.useState(false);
@@ -88,11 +85,7 @@ export const NFTView: React.FC = () => {
     matomoRequestEvent({
       category: 'ViewAssets',
       action: 'viewNFTDetail',
-      label: [
-        getKRCategoryByType(currentAccount?.type),
-        currentAccount?.brandName,
-        item?.collection ? 'true' : 'false',
-      ].join('|'),
+      label: item?.collection ? 'collection' : 'single',
     });
   }, []);
 

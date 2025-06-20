@@ -1,110 +1,31 @@
-import { TooltipWithMagnetArrow } from '@/ui/component/Tooltip/TooltipWithMagnetArrow';
-import { useRabbySelector } from '@/ui/store';
-import { useCommonPopupView } from '@/ui/utils';
-import clsx from 'clsx';
-import { sortBy } from 'lodash';
-import React, { useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
+/**
+ * TestnetChainList
+ *
+ * Original Purpose: In Rabby Wallet, this component likely displayed a list of
+ * available testnet chains, possibly for development or testing purposes. It
+ * would have used `useRabbySelector` to get information about the current account
+ * and available chains from the Redux store.
+ *
+ * Current Status in SwagTix Wallet:
+ * The SwagTix wallet is designed to be a simplified, PulseChain-focused (mainnet)
+ * wallet for NFT tickets. Testnet chain selection and display are not part of its
+ * core functionality. The complex Redux store, including `useRabbySelector`, has
+ * been removed.
+ *
+ * To resolve build errors and align with the simplified scope, this component
+ * now returns `null`, effectively removing it from the UI. If testnet support
+ * or a chain selector becomes necessary for SwagTix in the future, this component
+ * would need to be re-implemented with a new data source and logic appropriate
+ * for SwagTix's architecture.
+ */
+import React from 'react';
 
-const COUNT = 5;
-
-export const TestnetChainList = ({
-  onChange,
-}: {
-  onChange(id: string | null): void;
-}) => {
-  const { data, visible } = useCommonPopupView();
-  const chainList = useRabbySelector((store) =>
-    sortBy(store.chains.testnetList, (item) => item.name)
-  );
-  const [showMore, setShowMore] = React.useState(false);
-  const [activeChainId, setActiveChainId] = React.useState<string | null>(null);
-  const { t } = useTranslation();
-
-  const handleSelectChain = (id?: string) => {
-    if (!id || activeChainId === id) {
-      setActiveChainId(null);
-      onChange(null);
-    } else {
-      setActiveChainId(id);
-      onChange(id);
-    }
-  };
-
-  const renderChainList = useMemo(() => {
-    return showMore ? chainList : chainList.slice(0, COUNT);
-  }, [showMore, chainList]);
-
-  React.useEffect(() => {
-    if (!visible) {
-      setShowMore(false);
-      handleSelectChain();
-    }
-  }, [visible]);
-
-  const moreLen = chainList.length > COUNT ? chainList.length - COUNT : 0;
-
-  // if (balanceLoading) {
-  //   return (
-  //     <Skeleton.Input
-  //       active
-  //       className="block rounded-[6px] w-[360px] h-[68px] bg-r-neutral-card-2"
-  //     />
-  //   );
-  // }
-
-  if (!chainList?.length) {
-    return null;
-  }
-
-  return (
-    <div
-      className={clsx(
-        'bg-r-neutral-card-1 rounded-[8px] p-[12px]',
-        'flex gap-12 flex-wrap'
-      )}
-    >
-      {renderChainList.map((item) => {
-        const inactive =
-          activeChainId !== null && activeChainId !== String(item.id);
-        return (
-          <div
-            key={item.id}
-            className={clsx('flex items-center gap-[6px] cursor-pointer', {
-              'opacity-30': inactive,
-            })}
-            onClick={() => {
-              handleSelectChain(item.network);
-            }}
-          >
-            <img
-              className={clsx('w-16 h-16 rounded-full')}
-              src={item.logo}
-              alt={item.name}
-            />
-            <div className="text-r-neutral-title1 text-[13px] leading-[16px] font-medium hover:text-r-blue-default">
-              {item.name}
-            </div>
-          </div>
-        );
-      })}
-      {!showMore && moreLen ? (
-        <div
-          className={clsx(
-            'cursor-pointer text-12 underline text-r-neutral-foot leading-[20px]',
-            {
-              hidden: moreLen === 0,
-            }
-          )}
-          onClick={() => {
-            setShowMore(true);
-          }}
-        >
-          {moreLen > 1
-            ? t('page.dashboard.assets.unfoldChainPlural', { moreLen })
-            : t('page.dashboard.assets.unfoldChain')}
-        </div>
-      ) : null}
-    </div>
-  );
+const TestnetChainList = () => {
+  // Since SwagTix is PulseChain-only (mainnet assumed) and the complex store
+  // (including useRabbySelector and currentAccount logic) has been removed,
+  // this component, which lists testnet chains, is no longer relevant.
+  // Returning null to effectively remove it from the UI and fix build errors.
+  return null;
 };
+
+export default TestnetChainList;

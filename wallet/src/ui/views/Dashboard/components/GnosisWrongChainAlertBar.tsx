@@ -1,23 +1,20 @@
-import { useRabbySelector } from '@/ui/store';
-import { CHAINS, CHAINS_ENUM } from '@debank/common';
+/**
+ * GnosisWrongChainAlert
+ *
+ * In the full Rabby wallet this component warned the user when their Gnosis
+ * Safe was connected to the wrong chain.  The simplified SwagTix wallet has
+ * removed the complex Redux store (`useRabbySelector`) and multi-chain Gnosis
+ * support, so this alert is no longer relevant.
+ *
+ * We keep the component as a placeholder returning `null` to avoid breaking
+ * imports elsewhere while removing unnecessary logic.
+ */
+
 import React from 'react';
-import { useTranslation } from 'react-i18next';
-import IconAlert from 'ui/assets/alert.svg';
-import { ReactComponent as RcIconInfoCC } from '@/ui/assets/info-cc.svg';
 
-const GnosisWrongChainAlert = () => {
-  const { t } = useTranslation();
-  const currentConnection = useRabbySelector(
-    (state) => state.chains.currentConnection
-  );
-  const chain = CHAINS[currentConnection?.chain || CHAINS_ENUM.ETH];
-
-  return (
-    <div className="gnosis-wrong-chain-alert">
-      <RcIconInfoCC className="w-[14px] h-[14px]" />
-      {t('page.dashboard.GnosisWrongChainAlertBar.notDeployed')}
-    </div>
-  );
+// The filename is `GnosisWrongChainAlertBar.tsx`; keep the component name in sync.
+const GnosisWrongChainAlertBar = () => {
+  return null;
 };
 
-export default GnosisWrongChainAlert;
+export default GnosisWrongChainAlertBar;

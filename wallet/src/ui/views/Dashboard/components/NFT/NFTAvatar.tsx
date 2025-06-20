@@ -1,4 +1,3 @@
-import { NFTItem } from '@/background/service/openapi';
 import { Image } from 'antd';
 import clsx from 'clsx';
 import React from 'react';
@@ -9,6 +8,15 @@ import IconUnknown from 'ui/assets/token-default.svg';
 import IconZoom from 'ui/assets/zoom.svg';
 import { getChain } from '@/utils';
 import './style.less';
+
+// ---------------------------------------------------------------------------
+// Temporary placeholder until full type definitions are reinstated.
+// The component only needs to access `content_type`, so we mark it optional.
+// ---------------------------------------------------------------------------
+interface NFTItem {
+  content_type?: string;
+  [key: string]: any;
+}
 
 type AvatarProps = {
   content?: string;

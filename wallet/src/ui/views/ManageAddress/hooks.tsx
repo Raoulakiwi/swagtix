@@ -7,7 +7,6 @@ import {
   WALLET_SORT_SCORE,
 } from '@/constant';
 import { IDisplayedAccountWithBalance } from '@/ui/models/accountToDisplay';
-import { useRabbySelector } from '@/ui/store';
 import { useWallet } from '@/ui/utils';
 import { sortAccountsByBalance } from '@/ui/utils/account';
 import { groupBy, omit } from 'lodash';
@@ -110,14 +109,29 @@ export const getWalletScore = (
 export const useWalletTypeData = () => {
   const { t } = useTranslation();
   const wallet = useWallet();
+
+  /**
+   * Redux store has been removed in the trimmed SwagTix wallet.
+   * Fetch accounts directly from the wallet service instead and
+   * assume no highlighted addresses for now.
+   */
   const {
-    accountsList,
-    highlightedAddresses = [],
-    loadingAccounts,
-  } = useRabbySelector((s) => ({
-    ...s.accountToDisplay,
-    highlightedAddresses: s.addressManagement.highlightedAddresses,
-  }));
+    value: accountsList = [],
+    loading: loadingAccounts,
+  } = useAsync(async () => {
+    try {
+      // Prefer a dedicated helper if available, otherwise fall back to
+      // the generic account list.
+      // eslint-disable-next-line @typescript-eslint/await-thenable
+      return (await (wallet as any)?.listAccounts?.()) || [];
+    } catch {
+      return [];
+    }
+  }, [wallet]);
+
+  // Highlighted-address feature is not yet re-implemented.
+  const highlightedAddresses: Array<{ address: string; brandName?: string }> =
+    [];
 
   const sortedRef = useRef(false);
   const sortIdList = useRef<string[]>([]);

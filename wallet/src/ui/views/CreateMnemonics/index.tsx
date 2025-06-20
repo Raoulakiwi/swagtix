@@ -1,16 +1,13 @@
 import React from 'react';
-import { connectStore, useRabbyDispatch, useRabbySelector } from 'ui/store';
 import RiskCheck from './RiskCheck';
 import DisplayMnemonic from './DisplayMnemonic';
 import { useTranslation } from 'react-i18next';
 
 const CreateMnemonic = () => {
-  const step = useRabbySelector((s) => s.createMnemonics.step);
+  // In the original Rabby wallet `step` came from the Redux store.
+  // For the trimmed SwagTix wallet we keep the flow local-state based.
+  const [step] = React.useState<'risk-check' | 'display'>('risk-check');
   const { t } = useTranslation();
-  const dispatch = useRabbyDispatch();
-  React.useEffect(() => {
-    dispatch.createMnemonics.getAllHDKeyrings();
-  }, []);
   let node;
 
   switch (step) {
@@ -27,4 +24,4 @@ const CreateMnemonic = () => {
   return node;
 };
 
-export default connectStore()(CreateMnemonic);
+export default CreateMnemonic;

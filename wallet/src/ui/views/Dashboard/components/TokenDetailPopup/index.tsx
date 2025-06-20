@@ -1,13 +1,14 @@
-import { TokenItem } from '@/background/service/openapi';
+// Placeholder for TokenItem until full type definitions are restored.
+interface TokenItem {
+  [key: string]: any;
+}
 import { Popup } from '@/ui/component';
 import React from 'react';
 import TokenDetail from './TokenDetail';
 import './style.less';
 import { getUiType, isSameAddress, useWallet } from '@/ui/utils';
 import { Account, Token } from '@/background/service/preference';
-import { useRabbyDispatch } from 'ui/store';
-import { DisplayedToken } from 'ui/utils/portfolio/project';
-import { AbstractPortfolioToken } from 'ui/utils/portfolio/types';
+// Removed useRabbyDispatch and portfolio helpers (not needed in trimmed wallet)
 import { useLocation } from 'react-router-dom';
 
 const isTab = getUiType().isTab;
@@ -34,7 +35,6 @@ export const TokenDetailPopup = ({
   account,
 }: TokenDetailProps) => {
   const wallet = useWallet();
-  const dispatch = useRabbyDispatch();
   const [isAdded, setIsAdded] = React.useState(false);
 
   const location = useLocation();
@@ -44,31 +44,12 @@ export const TokenDetailPopup = ({
 
   const handleAddToken = React.useCallback((tokenWithAmount) => {
     if (!tokenWithAmount) return;
-
-    if (tokenWithAmount.is_core) {
-      dispatch.account.addBlockedToken(
-        new DisplayedToken(tokenWithAmount) as AbstractPortfolioToken
-      );
-    } else {
-      dispatch.account.addCustomizeToken(
-        new DisplayedToken(tokenWithAmount) as AbstractPortfolioToken
-      );
-    }
+    // In the simplified wallet we just toggle local state.
     setIsAdded(true);
   }, []);
 
   const handleRemoveToken = React.useCallback((tokenWithAmount) => {
     if (!tokenWithAmount) return;
-
-    if (tokenWithAmount?.is_core) {
-      dispatch.account.removeBlockedToken(
-        new DisplayedToken(tokenWithAmount) as AbstractPortfolioToken
-      );
-    } else {
-      dispatch.account.removeCustomizeToken(
-        new DisplayedToken(tokenWithAmount) as AbstractPortfolioToken
-      );
-    }
     setIsAdded(false);
   }, []);
 

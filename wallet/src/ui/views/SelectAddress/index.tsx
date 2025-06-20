@@ -4,7 +4,6 @@ import { getUiType } from 'ui/utils';
 import { KEYRING_CLASS } from 'consts';
 import './style.less';
 import { HDManager } from '../HDManager/HDManager';
-import { useRabbyDispatch } from '@/ui/store';
 
 type State = {
   keyring: string;
@@ -49,19 +48,17 @@ const SelectAddress = () => {
   }
 
   const [isMounted, setIsMounted] = React.useState(false);
-  const dispatch = useRabbyDispatch();
   const initMnemonics = async () => {
-    if (isMnemonic) {
-      dispatch.importMnemonics.switchKeyring({
-        stashKeyringId: keyringId.current as number,
-      });
-    }
-
+    // In the stripped-down SwagTix wallet we no longer rely on the
+    // global Redux store.  If switching the active key-ring is required
+    // the parent component should handle it via the `wallet` service
+    // when this page finishes.  For now we simply mark the component as
+    // mounted so that the HDManager can render.
     setIsMounted(true);
   };
   React.useEffect(() => {
     initMnemonics();
-  }, [query]);
+  }, [query]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { keyring, brand } = state;
   const keyringId = useRef<number | null | undefined>(state.keyringId);

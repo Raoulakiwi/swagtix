@@ -1,134 +1,142 @@
-import { useCommonPopupView } from '@/ui/utils';
-import React, { useState } from 'react';
-import { ChainList } from './ChainList';
-import { AssetListContainer } from './AssetListContainer';
-import NetSwitchTabs, {
-  useSwitchNetTab,
-} from 'ui/component/PillsSwitch/NetSwitchTabs';
-import { ReactComponent as AssetEmptySVG } from '@/ui/assets/dashboard/asset-empty.svg';
-import clsx from 'clsx';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { CustomTestnetAssetList } from './CustomTestnetAssetList';
-import { AddCustomTokenPopup } from './CustomAssetList/AddCustomTokenPopup';
-import { Button } from 'antd';
-import { SpecialTokenListPopup } from './components/TokenButton';
-import { useRabbySelector } from '@/ui/store';
-import useSortToken from '@/ui/hooks/useSortTokens';
-import { TestnetChainList } from './TestnetChainList';
+import { TokenTable, Props as TokenTableProps } from './components/TokenTable';
+import { TokenItem } from '@rabby-wallet/rabby-api/dist/types';
+import { useWallet } from '@/ui/utils';
+import { useAsync } from 'react-use';
+import { Empty } from './Empty';
+import { Spin } from 'antd';
+import styled from 'styled-components';
+import { sortBy } from 'lodash';
+import { getTokenSymbol } from '@/ui/utils/token';
+import { AbstractPortfolioToken } from './components/TokenAssets';
 
-export const AssetList = ({
-  visible,
-  onClose,
-}: {
-  visible: boolean;
-  onClose?(): void;
+// Placeholder type for AbstractPortfolioToken if not already defined/imported
+// This might be needed if the original type came from a removed module.
+// For now, let's assume AbstractPortfolioToken is available or we'll use TokenItem.
+// If AbstractPortfolioToken is distinct and necessary, it should be defined.
+// For simplicity, if AbstractPortfolioToken is just a more specific TokenItem,
+// we might be able to use TokenItem directly or a union type.
+
+// Let's define a minimal AbstractPortfolioToken for now if it's not imported from elsewhere
+// interface AbstractPortfolioToken extends TokenItem {
+//   _tokenId: string;
+//   // Add other specific fields if known and necessary
+// }
+
+type TokenWithAmount = TokenItem & {
+  amount: number;
+  price: number;
+};
+
+const LoadingWrapper = styled.div`
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+export type AssetListProps = {
+  list?: TokenWithAmount[];
+  isLoading?: boolean;
+  onSearch?: (val: string) => void;
+  searchVal?: string;
+  onSort?: (sortType: string) => void;
+  sortType?: string;
+  EmptyComponent?: React.ReactNode;
+  hideSmallBalance?: boolean;
+} & TokenTableProps;
+
+export const AssetList: React.FC<AssetListProps> = ({
+  list,
+  isLoading = false,
+  onSearch,
+  searchVal,
+  onSort,
+  sortType,
+  EmptyComponent,
+  hideSmallBalance,
+  ...tableProps
 }) => {
   const { t } = useTranslation();
-  const { setHeight, data } = useCommonPopupView();
-  const [selectChainId, setSelectChainId] = useState<string | null>(null);
-  const [selectTestnetChainId, setSelectTestnetChainId] = useState<
-    string | null
-  >(null);
-  const handleSelectChainChange = (id: string | null) => {
-    setSelectChainId(id);
-  };
-  const handleTestnetSelectChainChange = (id: string | null) => {
-    setSelectTestnetChainId(id);
-  };
-  const [isEmptyAssets, setIsEmptyAssets] = useState<boolean>(false);
-  const [isTestnetEmptyAssets, setIsTestnetEmptyAssets] = useState(false);
-  const { isShowTestnet, selectedTab, onTabChange } = useSwitchNetTab();
+  const wallet = useWallet();
 
-  React.useEffect(() => {
-    setHeight(488);
-  }, []);
+  // Removed useRabbySelector and related state:
+  // customizedTokens, blockedTokens, balanceMap
 
-  React.useEffect(() => {
-    if (visible) {
-      onTabChange('mainnet');
+  const { value: customizedTokens, loading: customizedTokensLoading } = useAsync(
+    async () => {
+      // Placeholder: In a real app, this might fetch customized tokens if needed
+      // For now, returning an empty array as the store logic is removed
+      return [];
+    },
+    []
+  );
+
+  const { value: blockedTokens, loading: blockedTokensLoading } = useAsync(
+    async () => {
+      // Placeholder: In a real app, this might fetch blocked tokens if needed
+      return [];
+    },
+    []
+  );
+
+  const shownList = React.useMemo(() => {
+    let result: (TokenItem | AbstractPortfolioToken)[] = list || []; // Type as union or TokenItem[]
+
+    if (hideSmallBalance) {
+      result = result.filter((item) => {
+        if (item.price) {
+          return new BigNumber(item.amount).times(item.price).gte(0.01);
+        }
+        return true;
+      });
     }
-  }, [visible]);
 
-  const [isShowAddModal, setIsShowAddModal] = useState<boolean>(false);
+    if (searchVal) {
+      result = result.filter(
+        (item) =>
+          getTokenSymbol(item).toLowerCase().includes(searchVal.toLowerCase()) ||
+          item.name.toLowerCase().includes(searchVal.toLowerCase())
+      );
+    }
 
-  const { customize } = useRabbySelector((store) => store.account.tokens);
-  const tokens = useSortToken(customize);
-  const [showCustomizedTokens, setShowCustomizedTokens] = React.useState(false);
+    if (sortType) {
+      result = sortBy(result, (item) => {
+        switch (sortType) {
+          case 'amount':
+            return item.amount * (item.price || 0);
+          case 'price':
+            return item.price || 0;
+          default:
+            return 0;
+        }
+      }).reverse();
+    }
+    // The type error TS2322 occurs here if shownList is expected to be AbstractPortfolioToken[]
+    // but result can contain TokenItem.
+    // Casting to `any[]` is a quick fix, but ideally, the types should be harmonized
+    // or TokenTableProps.list should accept (TokenItem | AbstractPortfolioToken)[].
+    // For now, let's ensure shownList is typed as (TokenItem | AbstractPortfolioToken)[]
+    // or TokenItem[] if AbstractPortfolioToken is not strictly needed for TokenTable.
+    return result as (TokenItem | AbstractPortfolioToken)[];
+  }, [list, searchVal, sortType, hideSmallBalance]);
+
+  if (isLoading || customizedTokensLoading || blockedTokensLoading) {
+    return (
+      <LoadingWrapper>
+        <Spin spinning={isLoading} />
+      </LoadingWrapper>
+    );
+  }
 
   return (
-    <>
-      {isShowTestnet && (
-        <NetSwitchTabs
-          value={selectedTab}
-          onTabChange={onTabChange}
-          // className="h-[28px] box-content mt-[20px] mb-[20px]"
-        />
-      )}
-      <div className={clsx(selectedTab === 'mainnet' ? 'block' : 'hidden')}>
-        <div className={clsx('mt-[120px]', isEmptyAssets ? 'block' : 'hidden')}>
-          <AssetEmptySVG className="m-auto" />
-          <div className="mt-0 text-r-neutral-foot text-[14px] text-center">
-            {t('page.dashboard.assets.noAssets')}
-          </div>
-
-          {isEmptyAssets ? (
-            <div className="w-[100%] flex justify-center items-center">
-              <Button
-                type="primary"
-                className="w-[200px] h-[44px] mt-[50px]"
-                onClick={() => {
-                  setIsShowAddModal(true);
-                }}
-              >
-                {t('page.dashboard.assets.customButtonText')}
-              </Button>
-              <AddCustomTokenPopup
-                visible={isShowAddModal}
-                onClose={() => {
-                  setIsShowAddModal(false);
-                }}
-                onConfirm={(addedToken) => {
-                  setIsShowAddModal(false);
-                  setShowCustomizedTokens(true);
-                }}
-              />
-            </div>
-          ) : (
-            <SpecialTokenListPopup
-              label={
-                tokens?.length > 1
-                  ? t('page.dashboard.tokenDetail.customizedButtons')
-                  : t('page.dashboard.tokenDetail.customizedButton')
-              }
-              buttonText={t('page.dashboard.assets.customButtonText')}
-              description={t('page.dashboard.assets.customDescription')}
-              onClickButton={() => {
-                setShowCustomizedTokens(true);
-              }}
-              tokens={tokens}
-              visible={showCustomizedTokens}
-              onClose={() => setShowCustomizedTokens(false)}
-            />
-          )}
-        </div>
-        <div className={clsx(isEmptyAssets ? 'hidden' : 'block')}>
-          <ChainList onChange={handleSelectChainChange} />
-          <AssetListContainer
-            className="mt-12"
-            selectChainId={selectChainId}
-            visible={visible}
-            onEmptyAssets={setIsEmptyAssets}
-          />
-        </div>
-      </div>
-      <div className={clsx(selectedTab === 'testnet' ? 'block' : 'hidden')}>
-        <TestnetChainList onChange={handleTestnetSelectChainChange} />
-        <CustomTestnetAssetList
-          selectChainId={selectTestnetChainId}
-          visible={visible}
-          onClose={onClose}
-        />
-      </div>
-    </>
+    <div className="asset-list">
+      <TokenTable
+        {...tableProps}
+        list={shownList}
+        EmptyComponent={EmptyComponent || <Empty />}
+      />
+    </div>
   );
 };

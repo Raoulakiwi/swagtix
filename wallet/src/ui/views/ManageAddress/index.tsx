@@ -1,6 +1,5 @@
 import { KEYRING_CLASS, KEYRING_TYPE } from '@/constant';
 import { Empty, PageHeader } from '@/ui/component';
-import { useRabbyDispatch } from '@/ui/store';
 import React, { useCallback, useState } from 'react';
 import { IDisplayedAccountWithBalance } from 'ui/models/accountToDisplay';
 import { ReactComponent as IconPlus } from '@/ui/assets/address/plus.svg';
@@ -33,8 +32,6 @@ const ManageAddress = () => {
   }>(query2obj(search));
 
   const wallet = useWallet();
-
-  const dispatch = useRabbyDispatch();
 
   const location = useLocation();
 
@@ -90,16 +87,16 @@ const ManageAddress = () => {
   );
 
   const updateInfoAndSetCurrentIndex = useCallback(
-    async (cond = true) => {
-      await dispatch.accountToDisplay.getAllAccountsToDisplay();
+    (cond = true) => {
+      // In the simplified wallet we no longer refresh a global store here.
       setCurrentIndex((pre) => {
         if (cond && TypedWalletObj && typedWalletIdList.length - 1 <= pre) {
-          setCurrentIndex(pre - 1);
+          return pre - 1;
         }
         return pre;
       });
     },
-    [typedWalletIdList, dispatch?.accountToDisplay?.getAllAccountsToDisplay]
+    [typedWalletIdList, TypedWalletObj]
   );
 
   const handleOpenDeleteModal = useCallback(

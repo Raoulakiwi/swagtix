@@ -1,147 +1,37 @@
-/* eslint "react-hooks/exhaustive-deps": ["error"] */
-/* eslint-enable react-hooks/exhaustive-deps */
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useRef,
-  useMemo,
-} from 'react';
-import useCurrentBalance from '@/ui/hooks/useCurrentBalance';
-import { useCommonPopupView, useWallet } from 'ui/utils';
-import { KEYRING_TYPE } from 'consts';
-import { SvgIconOffline } from '@/ui/assets';
-import clsx from 'clsx';
-import { Skeleton } from 'antd';
-import { Chain } from '@debank/common';
-import { ChainList } from './ChainList';
-import { formChartData, useCurve } from './useCurve';
-import { CurvePoint, CurveThumbnail } from './CurveView';
-import ArrowNextSVG from '@/ui/assets/dashboard/arrow-next.svg';
-import { ReactComponent as UpdateSVG } from '@/ui/assets/dashboard/update.svg';
-import { ReactComponent as WarningSVG } from '@/ui/assets/dashboard/warning-1.svg';
-import { useDebounce } from 'react-use';
-import { useRabbyDispatch, useRabbySelector } from '@/ui/store';
-import { BalanceLabel } from './BalanceLabel';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { TooltipWithMagnetArrow } from '@/ui/component/Tooltip/TooltipWithMagnetArrow';
-import { findChain } from '@/utils/chain';
-import {
-  useHomeBalanceView,
-  useRefreshHomeBalanceView,
-} from './useHomeBalanceView';
-import { BALANCE_LOADING_CONFS } from '@/constant/timeout';
 import type { Account } from '@/background/service/preference';
-import { IExtractFromPromise } from '@/ui/utils/type';
-import { OfflineChainNotify } from '../OfflineChainNotify';
+
+/**
+ * Simplified BalanceView
+ * The original implementation depended on complex Redux selectors,
+ * background services, and heavy logic. For the stripped-down SwagTix
+ * wallet we show a simple placeholder. Replace or extend with real
+ * PulseChain balance logic when available.
+ */
 
 const BalanceView = ({
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   currentAccount,
 }: {
   currentAccount?: Account | null;
 }) => {
   const { t } = useTranslation();
 
-  const { currentHomeBalanceCache } = useHomeBalanceView(
-    currentAccount?.address
+  return (
+    <div className="balance-view-placeholder">
+      {t('balanceView.placeholder', 'Balance view under construction')}
+    </div>
   );
+};
 
-  const initHasCacheRef = useRef(!!currentHomeBalanceCache?.balance);
-  const [accountBalanceUpdateNonce, setAccountBalanceUpdateNonce] = useState(
-    initHasCacheRef?.current ? -1 : 0
-  );
-
-  useEffect(() => {
-    if (!initHasCacheRef?.current) return;
-    const timer = setTimeout(() => {
-      setAccountBalanceUpdateNonce((prev) => prev + 1);
-    }, BALANCE_LOADING_CONFS.TIMEOUT);
-
-    return () => {
-      clearTimeout(timer);
-    };
-  }, []);
-
-  const {
-    balance: latestBalance,
-    matteredChainBalances: latestMatteredChainBalances,
-    chainBalancesWithValue: latestChainBalancesWithValue,
-    success: loadBalanceSuccess,
-    balanceLoading,
-    balanceFromCache,
-    isCurrentBalanceExpired,
-    refreshBalance,
-    missingList,
-  } = useCurrentBalance(currentAccount?.address, {
-    update: true,
-    noNeedBalance: false,
-    nonce: accountBalanceUpdateNonce,
-    initBalanceFromLocalCache: !!currentHomeBalanceCache?.balance,
-  });
-
-  const {
-    curveData: latestCurveData,
-    curveChartData: latestCurveChartData,
-    refresh: refreshCurve,
-    isCurveCollectionExpired,
-    isLoading: curveLoading,
-  } = useCurve(currentAccount?.address, {
-    nonce: accountBalanceUpdateNonce,
-    realtimeNetWorth: latestBalance,
-    initData: currentHomeBalanceCache?.originalCurveData,
-  });
-  const wallet = useWallet();
-  const [isGnosis, setIsGnosis] = useState(false);
-  const [gnosisNetworks, setGnosisNetworks] = useState<Chain[]>([]);
-  const [isHover, setHover] = useState(false);
-  const [curvePoint, setCurvePoint] = useState<CurvePoint>();
-  const [isDebounceHover, setIsDebounceHover] = useState(false);
-
-  const {
-    balance,
-    curveChartData,
-    matteredChainBalances,
-    chainBalancesWithValue,
-  } = useMemo(() => {
-    const balanceValue = latestBalance || currentHomeBalanceCache?.balance;
-
-    return {
-      balance: balanceValue,
-      curveChartData:
-        latestCurveChartData ||
-        formChartData(
-          currentHomeBalanceCache?.originalCurveData || [],
-          balanceValue,
-          Date.now()
-        ),
-      matteredChainBalances: latestMatteredChainBalances.length
-        ? latestMatteredChainBalances
-        : currentHomeBalanceCache?.matteredChainBalances || [],
-      chainBalancesWithValue: latestChainBalancesWithValue.length
-        ? latestChainBalancesWithValue
-        : currentHomeBalanceCache?.chainBalancesWithValue || [],
-    };
-  }, [
-    latestBalance,
-    latestMatteredChainBalances,
-    latestChainBalancesWithValue,
-    latestCurveChartData,
-    currentHomeBalanceCache,
-  ]);
-
-  const getCacheExpired = useCallback(async () => {
-    const res = {
-      balanceExpired: await isCurrentBalanceExpired(),
-      curveExpired: await isCurveCollectionExpired(),
-      expired: false,
-    };
-    res.expired = res.balanceExpired || res.curveExpired;
-
-    return res;
-  }, [isCurrentBalanceExpired, isCurveCollectionExpired]);
-
+export default BalanceView;
   const { isManualRefreshing, onRefresh } = useRefreshHomeBalanceView({
-    currentAddress: currentAccount?.address,
+/* NOTE:
+ * All previous heavy logic, external hooks, and Redux dependencies have been
+ * stripped.  When real PulseChain balance retrieval is implemented, expand
+ * this component accordingly without re-introducing removed global store hooks.
+ */
     refreshBalance,
     refreshCurve,
     isExpired: getCacheExpired,
@@ -301,7 +191,8 @@ const BalanceView = ({
   const currentIsLoss =
     currentHover && curvePoint ? curvePoint.isLoss : curveChartData?.isLoss;
   const currentChangeValue = currentHover ? curvePoint?.change : null;
-  const { hiddenBalance } = useRabbySelector((state) => state.preference);
+  // Simplified wallet: always show balance (no Redux preference store)
+  const hiddenBalance = false;
 
   const shouldShowRefreshButton =
     isManualRefreshing || balanceLoading || curveLoading;

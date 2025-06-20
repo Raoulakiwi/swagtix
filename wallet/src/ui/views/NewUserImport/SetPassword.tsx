@@ -1,235 +1,263 @@
-import { KEYRING_CLASS, KEYRING_TYPE } from '@/constant';
-import { useRabbyDispatch } from '@/ui/store';
-import { useWallet } from '@/ui/utils';
-import { obj2query, query2obj } from '@/ui/utils/url';
-import { useMemoizedFn, useMount } from 'ahooks';
-import { message } from 'antd';
-import React, { useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
+import { Button, Form, Input, message } from 'antd';
+import { useHistory } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useHistory, useLocation, useParams } from 'react-router-dom';
+import { StrayPageWithButton, PasswordStrength } from 'ui/component';
+import { useWallet, useWalletRequest } from 'ui/utils';
+// Removed useRabbyDispatch from 'ui/store'
+import { passwordReg } from 'consts';
 import { useNewUserGuideStore } from './hooks/useNewUserGuideStore';
-import { PasswordCard } from './PasswordCard';
-import qs from 'qs';
+import { query2obj } from '@/ui/utils/url';
+import { MatomoTime } from '@/utils/matomo-time';
+import { KEYRING_TYPE } from 'consts';
+import { ga4 } from '@/utils/ga4';
 
 export const NewUserSetPassword = () => {
-  const { t } = useTranslation();
-  const { store, setStore } = useNewUserGuideStore();
-  const { type } = useParams<{ type: string }>();
-
-  const { search } = useLocation();
-  const { isCreated = false, brand } = React.useMemo(() => query2obj(search), [
-    search,
-  ]);
-
   const history = useHistory();
   const wallet = useWallet();
-  const dispatch = useRabbyDispatch();
+  const { t } = useTranslation();
+  const [form] = Form.useForm();
+  const { store } = useNewUserGuideStore();
+  const { search } = history.location;
+  const query = query2obj(search);
+  const isNewUser = !!query.isNewUser;
 
-  const handlePrivateKey = useMemoizedFn(async (password: string) => {
-    try {
-      if (!store.privateKey) {
-        throw new Error('empty private key');
-      }
-      await wallet.boot(password);
-      await wallet.importPrivateKey(store.privateKey);
-      history.push('/new-user/success');
-    } catch (e) {
-      console.error(e);
-      message.error(e.message);
-      throw e;
-    }
-  });
+  const [passwordChanged, setPasswordChanged] = useState(false);
 
-  const handleSeedPhrase = useMemoizedFn(async (password: string) => {
-    try {
-      if (!store.seedPhrase) {
-        throw new Error('empty seed phrase');
-      }
-      let stashKeyringId: number | null = null;
+  const [run, loading] = useWalletRequest(
+    async (password: string) => {
+      // Refactored wallet creation logic
+      // The wallet.boot method should handle password setting and keyring creation
+      // based on the data stored in the 'store' (from useNewUserGuideStore)
+      let alianName = '';
+      let createdAccount;
 
-      if (!isCreated) {
-        await wallet.boot(password);
-        const {
-          keyringId,
-          isExistedKR,
-        } = await wallet.generateKeyringWithMnemonic(
-          store.seedPhrase,
-          store.passphrase || ''
-        );
-
-        dispatch.importMnemonics.switchKeyring({
-          finalMnemonics: store.seedPhrase,
-          passphrase: store.passphrase,
-          isExistedKeyring: isExistedKR,
-          stashKeyringId: keyringId,
-        });
-        stashKeyringId = keyringId;
-        dispatch.importMnemonics.switchKeyring({
-          stashKeyringId: stashKeyringId as number,
-        });
-
-        const accounts = await dispatch.importMnemonics.getAccounts({
-          start: 0,
-          end: 1,
-        });
-
-        await dispatch.importMnemonics.setSelectedAccounts([
-          accounts[0].address,
-        ]);
-        await dispatch.importMnemonics.confirmAllImportingAccountsAsync();
-
-        setStore({
+      if (store.keyringType === KEYRING_TYPE.HdKeyring && store.seedPhrase) {
+        // For HD Wallets (Seed Phrase)
+        const result = await wallet.boot(
           password,
-        });
-
-        history.push({
-          pathname: '/new-user/success',
-          search: `?hd=${KEYRING_CLASS.MNEMONIC}&keyringId=${String(
-            stashKeyringId || ''
-          )}&isCreated=${false}`,
-        });
-      } else {
-        await wallet.boot(password);
-        await wallet.createKeyringWithMnemonics(store.seedPhrase);
-        const keyring = await wallet.getKeyringByMnemonic(
           store.seedPhrase,
           store.passphrase
         );
-
-        stashKeyringId = await wallet.getMnemonicKeyRingIdFromPublicKey(
-          keyring!.publicKey!
+        alianName = result.alianName;
+        createdAccount = result;
+      } else if (
+        store.keyringType === KEYRING_TYPE.SimpleKeyring &&
+        store.privateKey
+      ) {
+        // For Simple Keyrings (Private Key)
+        const result = await wallet.boot(
+          password,
+          undefined, // no mnemonic
+          undefined, // no passphrase
+          store.privateKey
         );
-
-        dispatch.importMnemonics.switchKeyring({
-          stashKeyringId: stashKeyringId as number,
-        });
-
-        const accounts = await dispatch.importMnemonics.getAccounts({
-          start: 0,
-          end: 1,
-        });
-
-        await dispatch.importMnemonics.setSelectedAccounts([
-          accounts[0].address,
-        ]);
-        await dispatch.importMnemonics.confirmAllImportingAccountsAsync();
-
-        history.push({
-          pathname: '/new-user/success',
-          search: `?hd=${KEYRING_CLASS.MNEMONIC}&keyringId=${stashKeyringId}&isCreated=${isCreated}`,
-        });
+        alianName = result.alianName;
+        createdAccount = result;
+      } else if (store.keyringId && store.isHw) {
+        // For Hardware Wallets or other pre-existing keyrings
+        // This flow might need specific handling if `wallet.boot` is not suitable
+        // For now, we assume that if keyringId exists, the wallet is already "created"
+        // and we just need to set the password for the app.
+        await wallet.unlock(password); // This sets the app password
+        const currentAcc = await wallet.getCurrentAccount();
+        alianName = currentAcc?.alianName || 'Hardware Wallet';
+        createdAccount = currentAcc;
+      } else {
+        throw new Error(
+          'No valid import method data found (seed phrase, private key, or keyringId).'
+        );
       }
-    } catch (e) {
-      console.error(e);
-      message.error(e.message);
-    }
-  });
 
-  const handleGnosis = useMemoizedFn(async (password: string) => {
-    try {
-      if (!store.gnosis?.address) {
-        throw new Error('empty safe address');
-      }
-      await wallet.boot(password);
-      await wallet.importGnosisAddress(
-        store.gnosis.address,
-        store.gnosis.chainList.map((item) => item.network)
-      );
-      history.push({
-        pathname: '/new-user/success',
-        search: qs.stringify({
-          brand: KEYRING_TYPE.GnosisKeyring,
-        }),
+      // Set preference that wallet has been booted/setup
+      await wallet.setPreference('booted', true);
+
+      return { alianName, createdAccount };
+    },
+    {
+      onSuccess({ alianName, createdAccount }) {
+        if (isNewUser) {
+          history.replace({
+            pathname: '/new-user/success',
+            state: {
+              alianName,
+              keyringType: store.keyringType || createdAccount?.type,
+              brandName: store.brandName || createdAccount?.brandName,
+              accounts: store.accounts || (createdAccount ? [createdAccount] : []),
+              showImportIcon: store.showImportIcon,
+              isHw: store.isHw,
+            },
+          });
+        } else {
+          // This path might not be relevant for a simplified new user flow
+          // but kept for structural integrity from original Rabby code.
+          history.replace({
+            pathname: '/popup/import/success',
+            state: {
+              alianName,
+              keyringType: store.keyringType || createdAccount?.type,
+              brandName: store.brandName || createdAccount?.brandName,
+              accounts: store.accounts || (createdAccount ? [createdAccount] : []),
+              showImportIcon: store.showImportIcon,
+              isHw: store.isHw,
+            },
+          });
+        }
+      },
+      onError(err) {
+        message.error(
+          t('page.newAddress.setPassword.failedToCreateAPassword')
+        );
+        console.error('Error setting password / booting wallet:', err);
+      },
+    }
+  );
+
+  useEffect(() => {
+    const MatomoTime = new MatomoTime();
+    MatomoTime.start();
+    return () => {
+      MatomoTime.end({
+        category: 'User',
+        action: 'Create Password Page Time',
       });
-    } catch (e) {
-      console.error(e);
-      message.error(e.message);
-      throw e;
-    }
-  });
+    };
+  }, []);
 
-  const handleSubmit = useMemoizedFn(async (password: string) => {
-    if (type === 'private-key') {
-      handlePrivateKey(password);
-    }
-    if (type === 'seed-phrase') {
-      handleSeedPhrase(password);
-    }
-
-    if (type === 'gnosis-address') {
-      handleGnosis(password);
-    }
-
-    if (
-      ([
-        KEYRING_CLASS.HARDWARE.TREZOR,
-        KEYRING_CLASS.HARDWARE.ONEKEY,
-        KEYRING_CLASS.HARDWARE.GRIDPLUS,
-        KEYRING_CLASS.HARDWARE.LEDGER,
-        KEYRING_CLASS.HARDWARE.KEYSTONE,
-        KEYRING_CLASS.HARDWARE.BITBOX02,
-      ] as string[]).includes(type)
-    ) {
-      setStore({
-        password,
-      });
-      history.push({
-        pathname: `/new-user/import/hardware/${type}`,
-        search: qs.stringify({
-          brand,
-        }),
+  useEffect(() => {
+    if (store.isHw) {
+      ga4.fireEvent('hw_wallet_set_password', {
+        event_category: 'User',
+        event_label: store.brandName,
       });
     }
-    return;
-  });
-
-  const handleBack = useMemoizedFn(() => {
-    if (history.length > 1) {
-      history.goBack();
-    } else {
-      window.close();
-    }
-  });
-
-  const step = useMemo(() => {
-    return ([
-      KEYRING_CLASS.HARDWARE.TREZOR,
-      KEYRING_CLASS.HARDWARE.ONEKEY,
-      KEYRING_CLASS.HARDWARE.GRIDPLUS,
-      KEYRING_CLASS.HARDWARE.LEDGER,
-      KEYRING_CLASS.HARDWARE.KEYSTONE,
-    ] as string[]).includes(type)
-      ? 1
-      : 2;
-  }, [type]);
-
-  useMount(async () => {
-    const isBooted = await wallet.isBooted();
-    if (isBooted) {
-      message.error('already set password, please click rabby popup');
-      setTimeout(() => {
-        window.close();
-      }, 1000);
-    }
-  });
-
-  useMount(async () => {
-    if (type === 'private-key' && !store.privateKey) {
-      history.replace('/new-user/guide');
-      return;
-    }
-    if (type === 'seed-phrase' && !store.seedPhrase) {
-      history.replace('/new-user/guide');
-      return;
-    }
-
-    if (type === 'gnosis-address' && !store.gnosis?.address) {
-      history.replace('/new-user/guide');
-      return;
-    }
-  });
+  }, [store.isHw, store.brandName]);
 
   return (
-    <PasswordCard step={step} onBack={handleBack} onSubmit={handleSubmit} />
+    <StrayPageWithButton
+      custom={isNewUser}
+      header={{
+        title: t('page.newAddress.setPassword.title'),
+        center: true,
+        customBack: isNewUser ? () => history.goBack() : undefined,
+      }}
+      headerOnMobile={isNewUser}
+      className="new-user-set-password"
+      hasBack={isNewUser}
+      onBackClick={isNewUser ? () => history.goBack() : undefined}
+      footerFixed={!isNewUser}
+      spinning={loading}
+    >
+      <div className="rabby-container">
+        <div className="px-20">
+          <Form
+            form={form}
+            onFinish={({ password }) => {
+              run(password);
+            }}
+            onValuesChange={() => setPasswordChanged(true)}
+          >
+            <div className="text-center text-r-neutral-title1 text-20 mb-12 font-medium">
+              {t('page.newAddress.setPassword.subTitle')}
+            </div>
+            <p className="text-r-neutral-foot text-14 mb-[25px] text-center">
+              {t('page.newAddress.setPassword.desc')}
+            </p>
+            <Form.Item
+              name="password"
+              rules={[
+                {
+                  required: true,
+                  message: t(
+                    'page.newAddress.setPassword.passwordIsRequired'
+                  ),
+                },
+                {
+                  pattern: passwordReg,
+                  message: t(
+                    'page.newAddress.setPassword.passwordLengthInvalid'
+                  ),
+                },
+              ]}
+            >
+              <Input
+                className="h-[52px]ลก"
+                type="password"
+                placeholder={t(
+                  'page.newAddress.setPassword.placeholderPassword'
+                )}
+                size="large"
+                autoFocus
+              />
+            </Form.Item>
+            <PasswordStrength password={form.getFieldValue('password')} />
+            <Form.Item
+              name="confirmPassword"
+              dependencies={['password']}
+              rules={[
+                {
+                  required: true,
+                  message: t(
+                    'page.newAddress.setPassword.confirmPasswordIsRequired'
+                  ),
+                },
+                {
+                  pattern: passwordReg,
+                  message: t(
+                    'page.newAddress.setPassword.passwordLengthInvalid'
+                  ),
+                },
+                ({ getFieldValue }) => ({
+                  validator(rule, value) {
+                    if (!value || getFieldValue('password') === value) {
+                      return Promise.resolve();
+                    }
+                    return Promise.reject(
+                      t('page.newAddress.setPassword.passwordNotMatch')
+                    );
+                  },
+                }),
+              ]}
+            >
+              <Input
+                className="h-[52px]"
+                type="password"
+                placeholder={t(
+                  'page.newAddress.setPassword.placeholderConfirmPassword'
+                )}
+                size="large"
+              />
+            </Form.Item>
+            {!isNewUser && (
+              <div className="fixed-footer">
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  size="large"
+                  className="w-[200px]"
+                  disabled={!passwordChanged}
+                >
+                  {t('global.confirm')}
+                </Button>
+              </div>
+            )}
+
+            {isNewUser && (
+              <div className="flex justify-center mt-[20px]">
+                <Button
+                  type="primary"
+                  className="w-[250px] h-[52px]"
+                  htmlType="submit"
+                  size="large"
+                  disabled={!passwordChanged}
+                >
+                  {t('global.next')}
+                </Button>
+              </div>
+            )}
+          </Form>
+        </div>
+      </div>
+    </StrayPageWithButton>
   );
 };

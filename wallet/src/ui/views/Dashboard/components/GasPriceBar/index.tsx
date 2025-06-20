@@ -1,163 +1,84 @@
-import ThemeIcon from '@/ui/component/ThemeMode/ThemeIcon';
-import { useRabbySelector } from '@/ui/store';
-import { splitNumberByStep, useWallet } from '@/ui/utils';
-import { findChain, findChainByEnum } from '@/utils/chain';
-import { CHAINS, CHAINS_ENUM } from '@debank/common';
-import { Skeleton } from 'antd';
-import clsx from 'clsx';
-import React, { useMemo } from 'react';
-import { useAsync } from 'react-use';
-import { ReactComponent as RcIconGas } from 'ui/assets/dashboard/gas.svg';
-import IconUnknown from 'ui/assets/token-default.svg';
+import React from 'react';
 
-interface Props {
-  currentConnectedSiteChain: CHAINS_ENUM;
-}
+/**
+ * GasPriceBar Component
+ *
+ * Original Purpose: Display current gas prices for selected chains.
+ * This was a feature of the full Rabby wallet, relying on complex store logic
+ * (e.g., `useRabbySelector` and `gas.gasPrice`) to fetch and display real-time
+ * gas information.
+ *
+ * Current Status in SwagTix Wallet:
+ * As part of simplifying the Rabby wallet into a focused NFT ticket solution
+ * for PulseChain, most DeFi-centric features, including detailed gas price
+ * tracking and display, have been removed. The underlying store and services
+ * that provided this data are no longer present.
+ *
+ * This component is now a placeholder and returns `null` to effectively remove
+ * the gas price bar from the UI. If a gas price indicator is needed in the future
+ * for the SwagTix wallet, it would likely be a much simpler implementation focused
+ * solely on PulseChain and integrated directly with the `walletController` or
+ * a dedicated PulseChain service.
+ *
+ * To re-enable or re-implement gas price display:
+ * 1. Ensure a service exists to fetch current gas prices for PulseChain.
+ * 2. Update this component to use that service (e.g., via a custom hook).
+ * 3. Design a UI suitable for displaying PulseChain gas information if needed.
+ */
+const GasPriceBar = () => {
+  // The original component used useRabbySelector to get gasPrice from the store.
+  // Since the store has been simplified and this feature is not core to an NFT ticket wallet,
+  // we return null to effectively remove this component from the UI.
+  return null;
 
-export const GasPriceBar: React.FC<Props> = ({ currentConnectedSiteChain }) => {
-  const wallet = useWallet();
-  const account = useRabbySelector((state) => state.account.currentAccount);
+  // --- Original Logic (for reference, now removed) ---
+  // const { gasPrice, customRPC } = useRabbySelector((s: RootState) => ({
+  //   gasPrice: s.gas.gasPrice,
+  //   customRPC: s.preference.customRPC,
+  // }));
+  // const wallet = useWallet();
+  // const { t } = useTranslation();
+  // const { activePopup } = useCommonPopupView();
 
-  const currentConnectedSiteChainNativeToken = useMemo(
-    () =>
-      currentConnectedSiteChain
-        ? findChain({
-            enum: currentConnectedSiteChain,
-          })?.nativeTokenAddress || 'eth'
-        : 'eth',
-    [currentConnectedSiteChain]
-  );
+  // const chain = useMemo(() => {
+  //   return findChain({
+  //     enum: CHAINS_ENUM.ETH,
+  //   });
+  // }, []);
 
-  const {
-    value: gasPrice = 0,
-    loading: gasPriceLoading,
-  } = useAsync(async () => {
-    try {
-      const chain = findChain({
-        serverId: currentConnectedSiteChainNativeToken,
-      });
-      const marketGas = chain?.isTestnet
-        ? await wallet.getCustomTestnetGasMarket({
-            chainId: chain?.id,
-          })
-        : await wallet.gasMarketV2({
-            chainId: currentConnectedSiteChainNativeToken,
-          });
-      const selectedGasPice = marketGas.find((item) => item.level === 'slow')
-        ?.price;
-      if (selectedGasPice) {
-        return Number(selectedGasPice / 1e9);
-      }
-    } catch (e) {
-      // DO NOTHING
-    }
-  }, [currentConnectedSiteChainNativeToken]);
+  // const currentGas = useMemo(() => {
+  //   if (!chain) return null;
+  //   const custom = customRPC[chain.serverId];
+  //   if (custom && custom.isTestnet) {
+  //     return null;
+  //   }
+  //   const price = gasPrice[chain.id];
+  //   if (!price || price.normal === undefined) return null;
+  //   return price;
+  // }, [gasPrice, chain, customRPC]);
 
-  const { value: tokenLogo, loading: tokenLoading } = useAsync(async () => {
-    const chainItem = findChainByEnum(currentConnectedSiteChain, {
-      fallback: true,
-    })!;
+  // const handleClickGas = () => {
+  //   if (!chain) return;
+  //   activePopup('GasPrice');
+  //   matomoRequestEvent({
+  //     category: 'GasPrice',
+  //     action: 'Click',
+  //     label: chain.name,
+  //   });
+  // };
 
-    try {
-      const data = await wallet.openapi.getToken(
-        account!.address,
-        chainItem.serverId || '',
-        chainItem.nativeTokenAddress || ''
-      );
-      return data?.logo_url || chainItem.nativeTokenLogo;
-    } catch (error) {
-      return chainItem.nativeTokenLogo;
-    }
-  }, [currentConnectedSiteChain]);
+  // if (!currentGas) {
+  //   return <></>;
+  // }
 
-  const {
-    value: tokenPrice,
-    loading: currentPriceLoading,
-  } = useAsync(async () => {
-    try {
-      const {
-        change_percent = 0,
-        last_price = 0,
-      } = await wallet.openapi.tokenPrice(currentConnectedSiteChainNativeToken);
-
-      return { currentPrice: last_price, percentage: change_percent };
-    } catch (e) {
-      return {
-        currentPrice: null,
-        percentage: null,
-      };
-    }
-  }, [currentConnectedSiteChainNativeToken]);
-
-  const { currentPrice = null, percentage = null } = tokenPrice || {};
-  const isETH = currentConnectedSiteChainNativeToken === 'eth';
-
-  return (
-    <div
-      className={clsx('price-viewer h-32', {
-        'px-[17px] py-[7px]': isETH,
-        'px-[18px] py-[8px]': !isETH,
-      })}
-    >
-      <div className="eth-price">
-        {tokenLoading ? (
-          <Skeleton.Avatar
-            className="bg-transparent"
-            size={18}
-            active
-            shape="circle"
-          />
-        ) : (
-          <img
-            src={tokenLogo || IconUnknown}
-            className={clsx('rounded-full', {
-              'w-[18px] h-[18px]': isETH,
-              'w-[16px] h-[16px]': !isETH,
-            })}
-          />
-        )}
-        {currentPriceLoading ? (
-          <Skeleton.Button className="h-[14px] bg-transparent" active={true} />
-        ) : (
-          <>
-            <div className="gasprice">
-              {currentPrice !== null
-                ? currentPrice < 0.01
-                  ? '<$0.01'
-                  : `$${splitNumberByStep(currentPrice.toFixed(2))}`
-                : '-'}
-            </div>
-            {percentage !== null && (
-              <div
-                className={
-                  percentage > 0
-                    ? 'positive'
-                    : percentage === 0
-                    ? 'even'
-                    : 'depositive'
-                }
-              >
-                {percentage >= 0 && '+'}
-                {percentage?.toFixed(2)}%
-              </div>
-            )}
-          </>
-        )}
-      </div>
-      <div className="gas-container">
-        <ThemeIcon
-          src={RcIconGas}
-          className="w-[16px] h-[16px] relative -top-1"
-        />
-        {gasPriceLoading ? (
-          <Skeleton.Button className="h-[14px] bg-transparent" active={true} />
-        ) : (
-          <>
-            <div className="gasprice">{`${splitNumberByStep(gasPrice)}`}</div>
-            <div className="gwei">Gwei</div>
-          </>
-        )}
-      </div>
-    </div>
-  );
+  // return (
+  //   <div className="gas-price-bar" onClick={handleClickGas}>
+  //     <img src={IconGas} alt="" className="icon icon-gas" />
+  //     <span className="gas-price-bar-text">
+  //       {Math.round(currentGas.normal / 1e9)}
+  //     </span>
+  //   </div>
+  // );
 };
+
+export default GasPriceBar;

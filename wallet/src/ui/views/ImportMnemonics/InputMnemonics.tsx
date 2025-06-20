@@ -5,7 +5,7 @@ import styled from 'styled-components';
 import clsx from 'clsx';
 import { getUiType, useWallet, useWalletRequest } from '@/ui/utils';
 import { clearClipboard } from '@/ui/utils/clipboard';
-import { connectStore, useRabbyDispatch } from '../../store';
+// Removed connectStore and store-related hooks
 import WordsMatrix from '@/ui/component/WordsMatrix';
 import { KEYRING_CLASS } from '@/constant';
 import { useTranslation } from 'react-i18next';
@@ -30,13 +30,12 @@ const ImportMnemonics = () => {
   const wallet = useWallet();
   const [form] = Form.useForm<IFormStates>();
   const { t } = useTranslation();
-  const dispatch = useRabbyDispatch();
   const [needPassphrase, setNeedPassphrase] = React.useState(false);
   const [slip39ErrorIndex, setSlip39ErrorIndex] = React.useState<number>(-1);
   const [isSlip39, setIsSlip39] = React.useState(false);
   const [slip39GroupNumber, setSlip39GroupNumber] = React.useState(1);
 
-  let keyringId: number | null;
+  let keyringId: number | null = null;
 
   const onPassphrase = React.useCallback((val: boolean) => {
     setNeedPassphrase(val);
@@ -63,24 +62,9 @@ const ImportMnemonics = () => {
     async (mnemonics: string, passphrase: string) => {
       await checkSubmitSlip39Mnemonics(mnemonics);
 
-      const {
-        keyringId: stashKeyringId,
-        isExistedKR,
-      } = await wallet.generateKeyringWithMnemonic(mnemonics, passphrase);
+      const { keyringId: stashKeyringId } =
+        await wallet.generateKeyringWithMnemonic(mnemonics, passphrase);
 
-      dispatch.importMnemonics.switchKeyring({
-        finalMnemonics: mnemonics,
-        passphrase,
-        isExistedKeyring: isExistedKR,
-        stashKeyringId,
-      });
-      const accounts = await dispatch.importMnemonics.getAccounts({
-        start: 0,
-        end: 1,
-      });
-
-      await dispatch.importMnemonics.setSelectedAccounts([accounts[0].address]);
-      await dispatch.importMnemonics.confirmAllImportingAccountsAsync();
       keyringId = stashKeyringId;
     },
     {
@@ -89,9 +73,8 @@ const ImportMnemonics = () => {
         clearClipboard();
         history.push({
           pathname: '/new-user/success',
-          search: `?hd=${
-            KEYRING_CLASS.MNEMONIC
-          }&keyringId=${keyringId}&isCreated=${false}`,
+          search: `?hd=${KEYRING_CLASS.MNEMONIC}&keyringId=${keyringId ?? 0
+            }&isCreated=false`,
         });
       },
       onError(err) {
@@ -102,10 +85,10 @@ const ImportMnemonics = () => {
             value: form.getFieldValue('mnemonics'),
           },
         ]);
-        setErrMsgs([
-          err?.message ||
-            t('page.newAddress.theSeedPhraseIsInvalidPleaseCheck'),
-        ]);
+      setErrMsgs([
+        err?.message ||
+          t('page.newAddress.theSeedPhraseIsInvalidPleaseCheck'),
+      ]);
       },
     }
   );

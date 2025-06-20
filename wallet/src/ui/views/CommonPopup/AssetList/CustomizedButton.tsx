@@ -1,8 +1,4 @@
 import React from 'react';
-import { TokenButton } from './components/TokenButton';
-import { useRabbySelector } from '@/ui/store';
-import useSortToken from '@/ui/hooks/useSortTokens';
-import { useTranslation } from 'react-i18next';
 
 type Props = {
   onClickButton: () => void;
@@ -13,24 +9,14 @@ export const CustomizedButton: React.FC<Props> = ({
   onClickButton,
   isTestnet,
 }) => {
-  const { customize } = useRabbySelector((store) =>
-    isTestnet ? store.account.testnetTokens : store.account.tokens
-  );
-  const list = useSortToken(customize);
-  const { t } = useTranslation();
-
-  return (
-    <TokenButton
-      label={t('page.dashboard.tokenDetail.customizedButton')}
-      modalTitle={
-        list?.length > 1
-          ? t('page.dashboard.tokenDetail.customizedListTitles')
-          : t('page.dashboard.tokenDetail.customizedListTitle')
-      }
-      buttonText={t('page.dashboard.assets.customButtonText')}
-      description={t('page.dashboard.assets.customDescription')}
-      tokens={list}
-      onClickButton={onClickButton}
-    />
-  );
+  /**
+   * The full Rabby implementation showed a list of user-customised tokens.
+   * SwagTix wallet no longer maintains that global token list, so this
+   * feature is disabled for now.  Returning `null` avoids build-time
+   * dependency errors on the removed Redux store and hooks.
+   *
+   * If a customised-token feature is required in future, re-implement it
+   * here with a lightweight data source.
+   */
+  return null;
 };

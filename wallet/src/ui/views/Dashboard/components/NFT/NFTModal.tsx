@@ -1,4 +1,3 @@
-import { NFTItem } from '@/background/service/openapi';
 import { Button, Tooltip } from 'antd';
 import React from 'react';
 import { useHistory } from 'react-router-dom';
@@ -11,6 +10,15 @@ import clsx from 'clsx';
 import { useTranslation } from 'react-i18next';
 import { openNFTLinkFromChainItem } from '@/ui/views/ApprovalManagePage/utils';
 import { findChainByServerID } from '@/utils/chain';
+
+/**
+ * Placeholder for NFT item data since the original OpenAPI types have been
+ * removed in the trimmed-down SwagTix wallet.  Extend or replace with a more
+ * specific type once a dedicated data layer is introduced.
+ */
+interface NFTItem {
+  [key: string]: any;
+}
 
 interface ContentProps {
   data?: NFTItem;

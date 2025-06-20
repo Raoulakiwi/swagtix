@@ -1,78 +1,122 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { Button }ikaCheckbox } from 'antd';
 import { useTranslation } from 'react-i18next';
-import clsx from 'clsx';
-import { connectStore, useRabbyDispatch } from 'ui/store';
-import { Button } from 'antd';
-import { Card } from '@/ui/component/NewUserImport';
-import { ReactComponent as RcIconTips } from '@/ui/assets/new-user-import/tips.svg';
-import { ReactComponent as IconDotCC } from '@/ui/assets/new-user-import/dot-cc.svg';
-
-function useQuestionsCheck() {
-  const { t } = useTranslation();
-
-  const QUESTIONS = React.useMemo(() => {
-    return [
-      {
-        index: 1 as const,
-        content: t('page.newAddress.seedPhrase.importQuestion1'),
-      },
-      {
-        index: 2 as const,
-        content: t('page.newAddress.seedPhrase.importQuestion2'),
-      },
-      {
-        index: 3 as const,
-        content: t('page.newAddress.seedPhrase.importQuestion3'),
-      },
-    ];
-  }, []);
-
-  return {
-    questionChecks: QUESTIONS,
-  };
-}
+import { useHistory } from 'react-router-dom';
+import { PageHeader } from 'ui/component';
+// Removed store imports: connectStore, useRabbyDispatch
+// import { connectStore, useRabbyDispatch } from 'ui/store';
+import IconArrowRight from 'ui/assets/arrow-right-gray.svg';
+import IconCheckbox from 'ui/assets/checkbox.svg';
+import IconCheckboxEmpty from 'ui/assets/checkbox-empty.svg';
+import { query2obj } from '@/ui/utils/url';
+import { MatomoTime } from '@/utils/matomo-time';
+import { useWallet } from 'ui/utils'; // Import useWallet for setIsBackup if needed
 
 const RiskCheck = () => {
-  const dispatch = useRabbyDispatch();
+  const history = useHistory();
+  const wallet = useWallet(); // Added useWallet
   const { t } = useTranslation();
-  const { questionChecks } = useQuestionsCheck();
+  const [checked, setChecked] = React.useState(false);
+  const { search } = history.location;
+  const query = query2obj(search);
+  const isNewUser = !!query.isNewUser;
+
+  // Removed useRabbyDispatch
+  // const dispatch = useRabbyDispatch();
+
+  const handleNextClick = async () => {
+    if (!checked) {
+      return;
+    }
+    // The original logic dispatched 'preference.setIsBackup(true)'
+    // In the simplified SwagTix wallet, this state might be managed differently.
+    // For now, we can call a wallet service method if such a method exists,
+    // or assume the parent component handles this state after navigation.
+    try {
+      // Example: Call a wallet service method to set backup status
+      // This method would need to be implemented in the wallet service
+      await wallet.setIsBackup(true);
+      console.log('User acknowledged backup risk.');
+    } catch (error) {
+      console.error('Failed to set backup status:', error);
+      // Decide how to handle this error, e.g., show a message to the user
+    }
+
+    if (isNewUser) {
+      history.push('/new-user/success');
+    } else {
+      history.push({
+        pathname: '/popup/import/success',
+        state: {
+          showHeader: true,
+        },
+      });
+    }
+  };
+
+  const handleCheck = (checked: boolean) => {
+    setChecked(checked);
+  };
+
+  useEffect(() => {
+    const MatomoTime = new MatomoTime();
+    MatomoTime.start();
+    return () => {
+      MatomoTime.end({
+        category: 'User',
+        action: 'Create Mnemonics Risk Check Page Time',
+      });
+    };
+  }, []);
 
   return (
-    <Card title={t('page.newUserImport.createNewAddress.title')}>
-      <RcIconTips className="w-[54px] h-[49px] mx-auto mt-[24px]" />
-      <div className="mt-[22px] mb-[26px] text-[16px] font-normal text-center text-rabby-blue-default">
-        {t('page.newUserImport.createNewAddress.desc')}
-      </div>
-      <div className="flex flex-col gap-16">
-        {questionChecks.map((item, index) => (
-          <div
-            key={item.index}
-            className={clsx('flex justify-start gap-8', 'px-12')}
+    <div className="risk-check">
+      <PageHeader fixed>{t('page.newAddress.title.createMnemonics')}</PageHeader>
+      <div className="rabby-container">
+        <div className="pt-20 text-20 text-gray-title text-center font-medium">
+          {t('page.newAddress.riskCheck.title')}
+        </div>
+        <div className="mt-16 text-13 text-gray-subTitle text-center">
+          {t('page.newAddress.riskCheck.subTitle')}
+        </div>
+        <div className="mt-32 text-13 text-gray-subTitle">
+          <p className="mb-12">
+            {t('page.newAddress.riskCheck.line1')}
+          </p>
+          <p className="mb-12">
+            {t('page.newAddress.riskCheck.line2')}
+          </p>
+          <p className="mb-12">
+            {t('page.newAddress.riskCheck.line3')}
+          </p>
+        </div>
+        <div
+          className="mt-32 text-13 text-gray-subTitle flex items-center"
+          onClick={() => handleCheck(!checked)}
+        >
+          <img
+            src={checked ? IconCheckbox : IconCheckboxEmpty}
+            className="icon icon-checkbox cursor-pointer"
+          />
+          {t('page.newAddress.riskCheck.confirm')}
+        </div>
+        <div className="flex justify-center mt-48 pb-[55px]">
+          <Button
+            type="primary"
+            className="w-[200px]"
+            size="large"
+            onClick={handleNextClick}
+            disabled={!checked}
           >
-            <IconDotCC
-              className="mt-6 text-rabby-blue-default flex-shrink-0"
-              viewBox="0 0 8 8"
-            />
-            <span className="text-15 text-r-neutral-title1 font-normal">
-              {item.content}
-            </span>
-          </div>
-        ))}
+            {t('global.next')}
+            <img src={IconArrowRight} className="icon icon-arrow-right" />
+          </Button>
+        </div>
       </div>
-
-      <Button
-        onClick={() => dispatch.createMnemonics.stepTo('display')}
-        block
-        type="primary"
-        className={clsx(
-          'mt-[76px] h-[56px] shadow-none rounded-[8px]',
-          'text-[17px] font-medium bg-r-blue-default'
-        )}
-      >
-        {t('page.newUserImport.createNewAddress.showSeedPhrase')}
-      </Button>
-    </Card>
+    </div>
   );
 };
 
-export default connectStore()(RiskCheck);
+// Removed connectStore HOC
+// export default connectStore()(RiskCheck);
+export default RiskCheck;

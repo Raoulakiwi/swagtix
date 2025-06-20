@@ -229,3 +229,5 @@ const ImportSuccess = ({ isPopup = false }: { isPopup?: boolean }) => {
 };
 
 export default connectStore()(ImportSuccess);
+// Redux store removed – export component directly
+export default ImportSuccess;

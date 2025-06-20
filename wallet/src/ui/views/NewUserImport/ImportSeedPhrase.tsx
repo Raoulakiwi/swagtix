@@ -4,7 +4,6 @@ import { useHistory } from 'react-router-dom';
 import { Button, Form, Input } from 'antd';
 import WordsMatrix from '@/ui/component/WordsMatrix';
 import clsx from 'clsx';
-import { useRabbyDispatch } from '@/ui/store';
 import { getUiType, useWallet } from '@/ui/utils';
 import { useTranslation } from 'react-i18next';
 import styled from 'styled-components';
@@ -34,7 +33,6 @@ export const ImportSeedPhrase = () => {
   const wallet = useWallet();
   const [form] = Form.useForm<IFormStates>();
   const { t } = useTranslation();
-  const dispatch = useRabbyDispatch();
   const [needPassphrase, setNeedPassphrase] = React.useState(false);
   const [slip39ErrorIndex, setSlip39ErrorIndex] = React.useState<number>(-1);
   const [isSlip39, setIsSlip39] = React.useState(false);

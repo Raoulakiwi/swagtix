@@ -3,8 +3,14 @@ import { TBody, THeadCell, THeader, Table } from './Table';
 import { TokenItem, Props as TokenItemProps } from '../TokenItem';
 import { FixedSizeList } from 'react-window';
 import { TokenDetailPopup } from '@/ui/views/Dashboard/components/TokenDetailPopup';
-import { TokenItem as TokenItemType } from '@/background/service/openapi';
 import { useTranslation } from 'react-i18next';
+
+// Placeholder type for TokenItem since the original OpenAPI layer
+// has been removed from the cut-down wallet.
+// Replace with a proper definition if/when the data shape is known.
+interface TokenItemType {
+  [key: string]: any;
+}
 
 export interface Props {
   list?: TokenItemProps['item'][];

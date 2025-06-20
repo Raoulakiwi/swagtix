@@ -181,7 +181,13 @@ const CreatePin: React.FC = () => {
   const handleBack = () => {
     history.push('/onboarding/signup');
   };
-
+  /**
+   * Real async implementation – contains existing logic.
+   */
+  const handleSubmitAsync = async (values: {
+    pin: string;
+    confirmPin: string;
+  }) => {
   const handleSubmit = async (values: { pin: string; confirmPin: string }) => {
     const { pin, confirmPin } = values;
     
@@ -215,6 +221,15 @@ const CreatePin: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+  /**
+   * Thin sync wrapper for antd <Form onFinish>.  Returns `void`
+   * (as required by the Form typings) and invokes the async
+   * implementation without awaiting.
+   */
+  const handleSubmit = (values: { pin: string; confirmPin: string }): void => {
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    handleSubmitAsync(values);
   };
 
   // Focus on confirm PIN input when PIN is entered
